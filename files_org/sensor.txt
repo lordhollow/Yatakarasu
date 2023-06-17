@@ -1,0 +1,36 @@
+Plot	Load	%	0	100	3	95
+	CPU	/amdcpu/0/load/0	255,0,0
+	 Core #1	/amdcpu/0/load/1-2	255,128,128
+	 Core #2	/amdcpu/0/load/3-4	255,192,255
+	 Core #3	/amdcpu/0/load/5-6	255,128,255
+	 Core #4	/amdcpu/0/load/7-8	255,255,192
+	 Core #5	/amdcpu/0/load/9-10	255,128,128
+	 Core #6	/amdcpu/0/load/11-12	255,192,255
+	 Core #7	/amdcpu/0/load/13-14	255,128,255
+	 Core #8	/amdcpu/0/load/15-16	255,255,192
+	GPU	/gpu-nvidia/0/load/0	0,192,0
+
+Plot	Tempereture	℃	0	100	20	85
+	CPU	/amdcpu/0/temperature/2	255,0,0
+	 CCD(die)	/amdcpu/0/temperature/3	192,0,0
+	GPU	/gpu-nvidia/0/temperature/0	0,192,0
+	 HotSpot	/gpu-nvidia/0/temperature/2	0,255,0
+	M/B	/lpc/nct6799d/temperature/2	0,255,255
+	M.2	/nvme/2/temperature/0	255,255,0
+	SSD	/ssd/0/temperature/0	255,223,0
+	HDD	/hdd/1/temperature/0	255,191,0
+
+#ファン速度計
+Meter	RearFan	 rpm	0	1450	/lpc/nct6799d/fan/0
+Meter	CPUFan	 rpm	0	1850	/lpc/nct6799d/fan/1
+Meter	FrontFan	 rpm	0	1250	/lpc/nct6799d/fan/2
+Meter	GPUFan	rpm	0	3400	/gpu-nvidia/0/fan/1	0
+
+#消費電力系
+#Meter	POW	     W	0	200	/amdcpu/0/power/0+/gpu-nvidia/0/power/0
+Meter	CPU	     W	0	100	/amdcpu/0/power/0
+Meter	GPU	     W	0	100	/gpu-nvidia/0/power/0
+
+Meter	Memory	   GB	0	64	/ram/data/0
+
+
