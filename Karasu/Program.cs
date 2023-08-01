@@ -235,7 +235,14 @@ namespace Karasu
 
         private static void Open(string cmd, string param)
         {
-            Process.Start(cmd, param);
+            var info = new ProcessStartInfo(cmd, param);
+            if (File.Exists(cmd))
+            {
+                //コマンドがファイルの時はワーキングディレクトリをファイルの場所に指定
+                //(ファイルじゃないのはsteam://とかそういうのを想定）
+                info.WorkingDirectory = Path.GetDirectoryName(cmd);
+            }
+            Process.Start(info);
         }
 
         private static string YataFile(string name)
