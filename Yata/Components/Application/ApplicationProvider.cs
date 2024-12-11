@@ -21,6 +21,8 @@ namespace Yata.Components.Application
                     return new Application.Suspender();
                 case "DashboardBrightnessChanger":
                     return new Application.DashboardBrightnessChanger(container);
+                case "SetDisplayInput":
+                    return new Application.SetDisplayInput();
                 case "SetDisplayToporogy":
                     return new Application.SetDisplayToporogy();
                 case "SendKeyStroke":
