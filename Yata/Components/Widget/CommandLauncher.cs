@@ -326,11 +326,11 @@ namespace Yata.Components.Widget
                 }
                 if (app.Image == null)
                 {
-                    app.Image = System.Drawing.SystemIcons.Application.ToBitmap();
+                    using (var icon = System.Drawing.SystemIcons.Application.ToBitmap()) app.Image = CommonResource.CreateDrawingBitmap(icon);
                     if (entry.Command == "internal::LauncherNextPage" || entry.Command == "internal::LauncherPreviousPage")
                     {
                         app.Image.Dispose();
-                        app.Image = new Bitmap(48, 48);
+                        app.Image = new Bitmap(48, 48, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
                         using (var graphics = Graphics.FromImage(app.Image))
                         using (var font = new Font("Segoe UI", 26, FontStyle.Bold))
                         {

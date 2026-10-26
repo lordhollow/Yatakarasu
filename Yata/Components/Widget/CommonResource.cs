@@ -103,11 +103,27 @@ namespace Yata.Components.Widget
             //    return Image.FromStream(stream);
             //}
 
-            //ビットマップ作って返せばとりあえず安定。アニメーションありとか考慮しなければこれがいいかな
+            //ファイルを閉じた後も使える、描画用の乗算済みアルファ画像を保持する。
             using (var srcImg = Image.FromFile(file))
             {
-                return  new Bitmap(srcImg);
+                return CreateDrawingBitmap(srcImg);
             }
+        }
+
+        public static Bitmap CreateDrawingBitmap(Image source)
+        {
+            var bitmap = new Bitmap(source.Width, source.Height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            try
+            {
+                using (var graphics = Graphics.FromImage(bitmap))
+                {
+                    graphics.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy;
+                    var rectangle = new Rectangle(0, 0, source.Width, source.Height);
+                    graphics.DrawImage(source, rectangle, rectangle, GraphicsUnit.Pixel);
+                }
+                return bitmap;
+            }
+            catch { bitmap.Dispose(); throw; }
         }
 
         /// <summary>

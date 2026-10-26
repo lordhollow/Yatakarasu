@@ -48,6 +48,8 @@ static class ConfigurationRegression
             Run("Replacing widgets preserves unrelated cached drawings", WidgetReplacement);
             Run("Premultiplied layers preserve transparent composition", PremultipliedLayers);
             Run("Window drawing buffers retain full-size frames without shrinking", DrawingBufferCapacity);
+            Run("Loaded images preserve composition and release source files", DrawingImages);
+            Run("Launcher focus fades and clears for every image source", LauncherFocus);
             Console.WriteLine("All " + passed + " configuration checks passed.");
             foreach (var image in images) Console.WriteLine("PREVIEW: " + image);
             return 0;
@@ -324,6 +326,77 @@ static class ConfigurationRegression
             Check(context.MaximumBuffer == new Size(1601, 901), "Larger client dimensions were not handled.");
         }
         finally { context.MaximumBuffer = original; }
+    }
+    static void DrawingImages()
+    {
+        var path = Path.Combine(root, "transparent-resource.png");
+        using (var original = new Bitmap(32, 32, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+        {
+            using (var graphics = Graphics.FromImage(original))
+            using (var brush = new SolidBrush(Color.FromArgb(77, 210, 73, 31))) graphics.FillRectangle(brush, 0, 0, 20, 24);
+            original.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+            using (var loaded = CommonResource.LoadImage(path))
+            {
+                Check(loaded.PixelFormat == System.Drawing.Imaging.PixelFormat.Format32bppPArgb && loaded.Size == original.Size, "Image was not prepared for repeated drawing.");
+                File.Move(path, path + ".moved");
+                using (var before = new Bitmap(32, 32))
+                using (var after = new Bitmap(32, 32))
+                {
+                    using (var graphics = Graphics.FromImage(before)) { graphics.Clear(Color.DarkBlue); graphics.DrawImageUnscaled(original, 0, 0); }
+                    using (var graphics = Graphics.FromImage(after)) { graphics.Clear(Color.DarkBlue); graphics.DrawImageUnscaled(loaded, 0, 0); }
+                    for (int y = 0; y < 32; y++) for (int x = 0; x < 32; x++)
+                    {
+                        var a = before.GetPixel(x, y); var b = after.GetPixel(x, y);
+                        Check(Math.Abs(a.R - b.R) <= 2 && Math.Abs(a.G - b.G) <= 2 && Math.Abs(a.B - b.B) <= 2 && a.A == b.A, "Image conversion changed visible transparency.");
+                    }
+                }
+            }
+        }
+    }
+    static void LauncherFocus()
+    {
+        var path = Path.Combine(root, "focus-launcher.txt");
+        var definition = new LauncherDefinition();
+        definition.Entries.Add(new LauncherEntry { Column = 0, Caption = "File", Command = "internal::EditLauncher", IconPath = Path.Combine(root, "icon.png") });
+        definition.Entries.Add(new LauncherEntry { Column = 1, Caption = "Atlas", Command = "internal::EditLauncher", IconPath = "InternalApplicationIconsImage::0,0" });
+        definition.Entries.Add(new LauncherEntry { Column = 2, Caption = "Fallback", Command = "internal::EditLauncher" });
+        definition.Entries.Add(new LauncherEntry { Column = 3, Caption = "Next", Command = "internal::LauncherNextPage" });
+        definition.Entries.Add(new LauncherEntry { Column = 4, Caption = "Red", Command = "internal::ProbeNoOperation" });
+        definition.Entries.Add(new LauncherEntry { Row = 3, Column = 15, Caption = "Last slot", Command = "internal::EditLauncher", IconPath = Path.Combine(root, "icon.png") });
+        definition.Entries.Add(new LauncherEntry { Row = 3, Column = 14, Caption = "Previous", Command = "internal::LauncherPreviousPage" });
+        definition.Save(path);
+        using (var launcher = new CommandLauncher(CommandLauncher.ConstructionParameter.WXGA))
+        using (var bitmap = new Bitmap(1280, 180, System.Drawing.Imaging.PixelFormat.Format32bppPArgb))
+        using (var graphics = Graphics.FromImage(bitmap))
+        {
+            launcher.LoadFromFile(path, null); launcher.Update(); launcher.Draw(graphics);
+            foreach (var entry in definition.Entries)
+                Check(((Bitmap)launcher[entry.Row, entry.Column].Image).PixelFormat == System.Drawing.Imaging.PixelFormat.Format32bppPArgb, "Launcher image source still needs alpha conversion.");
+            foreach (var position in new[] { new[] { 0, 0 }, new[] { 0, 1 }, new[] { 0, 2 }, new[] { 0, 4 }, new[] { 3, 15 } })
+            {
+                int row = position[0], slot = position[1], y = row % 2 * 90;
+                launcher.ChangePage(row / 2 - (launcher.PageNumber - 1)); launcher.Update(); launcher.Draw(graphics);
+                var baseline = bitmap.GetPixel(slot * 80 + 10, y + 8);
+                launcher.Click(slot * 80 + 40, y + 40);
+                Check(launcher.Update(), "Focus did not start."); launcher.Draw(graphics);
+                var focus = bitmap.GetPixel(slot * 80 + 10, y + 8);
+                Check(slot == 4 ? focus.R > focus.G : focus.G > focus.R, "Focus has the wrong success/failure color.");
+                for (int frame = 1; frame < 30; frame++)
+                {
+                    Check(launcher.Update(), "Focus animation stopped too soon."); launcher.Draw(graphics);
+                    var fading = bitmap.GetPixel(slot * 80 + 10, y + 8);
+                    Check(fading.A < focus.A, "Focus did not fade continuously."); focus = fading;
+                }
+                var cleared = bitmap.GetPixel(slot * 80 + 10, y + 8);
+                Check(cleared.A == baseline.A && !launcher.Update(), "Focus indicator was not erased or idle kept redrawing.");
+            }
+            launcher.Click(14 * 80 + 40, 130);
+            Check(launcher.PageNumber == 1 && launcher.Update(), "Previous-page navigation did not redraw."); launcher.Draw(graphics);
+            Check(!launcher.Update(), "Previous-page navigation left a focus animation running.");
+            launcher.Click(3 * 80 + 40, 40);
+            Check(launcher.PageNumber == 2 && launcher.Update(), "Next-page navigation did not redraw."); launcher.Draw(graphics);
+            Check(!launcher.Update(), "Page navigation left a focus animation running.");
+        }
     }
     static Bitmap RenderLayers(bool premultiplied, float brightness)
     {
