@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 using LibreHardwareMonitor.Hardware;
+using Yata.Components;
 
 namespace Yata.Settings
 {
@@ -21,7 +22,7 @@ namespace Yata.Settings
             {
                 Id = all.Count(x => x.Identifier.ToString() == sensor.Identifier.ToString()) > 1 ? "(" + sensor.Name + ")" + sensor.Identifier : sensor.Identifier.ToString(),
                 Name = sensor.Name, Unit = UnitFor(sensor.SensorType),
-                Description = sensor.Name + "  |  " + sensor.SensorType + "  |  " + sensor.Identifier
+                Description = sensor.Name + "  |  " + (sensor is CodexUsageSensor ? "Codex・5分更新" : sensor.SensorType.ToString()) + "  |  " + sensor.Identifier
             }).OrderBy(x => x.Description).ToList();
         }
         static string UnitFor(SensorType type)

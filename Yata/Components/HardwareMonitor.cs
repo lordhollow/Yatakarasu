@@ -28,6 +28,7 @@ namespace Yata.Components
         Computer computer;
         int updateInProgress;
         NvidiaOptionalQueries nvidiaQueries;
+        CodexUsageMonitor codexUsage;
 
         public static HardwareMonitor DefaultInstance { get; private set; }
 
@@ -69,6 +70,9 @@ namespace Yata.Components
             var visitor = new InitializerVisitor();
             computer.Accept(visitor);
             AllSensors = visitor.AllSensors;
+            codexUsage = new CodexUsageMonitor();
+            AllSensors.Add(new CodexUsageSensor(codexUsage, false));
+            AllSensors.Add(new CodexUsageSensor(codexUsage, true));
         }
 
         /// <summary>
@@ -193,6 +197,8 @@ namespace Yata.Components
 
         void ConfigureOptionalQueries()
         {
+            codexUsage?.SetEnabled(UpdateTargetSensor.Cast<ValueHistorySensor>()
+                .SelectMany(sensor => sensor.SourceSensors).Any(sensor => sensor is CodexUsageSensor));
             if (nvidiaQueries == null) nvidiaQueries = new NvidiaOptionalQueries();
             nvidiaQueries.Configure(UpdateTargetHardware, new HashSet<ISensor>(
                 UpdateTargetSensor.Cast<ValueHistorySensor>().SelectMany(sensor => sensor.SourceSensors)));
@@ -272,6 +278,7 @@ namespace Yata.Components
 
         private void addToUpdateList(List<IHardware> list, IHardware hw)
         {
+            if (hw == null) return; // Account sensors have no physical device.
             //親から入れていく
             if (hw.Parent != null)
             {
@@ -287,6 +294,7 @@ namespace Yata.Components
 
         public void Dispose()
         {
+            codexUsage?.Dispose();
             nvidiaQueries?.Restore();
             computer.Close();
             computer = null;
@@ -349,6 +357,7 @@ namespace Yata.Components
 
         private void updateHardware()
         {
+            _ = codexUsage?.RefreshIfDue();
             var succeeded = new bool[UpdateTargetHardware.Count];
             if (UpdateParall)
             {
@@ -446,7 +455,7 @@ namespace Yata.Components
         ISensor baseSensor;
         ISensor[] baseSensors;
         Identifier localId;
-        float? inValue = 0;
+        float? inValue;
         private bool sumup;
 
         public ValueHistorySensor(ISensor baseSensor)
