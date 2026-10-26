@@ -85,8 +85,10 @@ ID欄には従来の範囲平均・合計の記法も入力できる。元ファ
 | グラフの編集欄（2個に共通） | `Settings/PlotEditor.cs` |
 
 共通枠の中央の`Body`パネルへ各設定フォームのコントロールを配置する。`Body`はフォーム直下のprotectedパネルとし、継承されるTableLayoutPanelなどの内部には置かない。グラフの欄は`PlotEditor`をユーザーコントロールとして編集する。
-グリッドの列の`Name`はDesignerのフィールド名と揃え、データの読み書きは`DataPropertyName`で対応付ける。表示見出しの変更には`HeaderText`を使う。
+グリッドの列の`Name`はDesignerのフィールド名と揃える。表示見出しの変更には`HeaderText`を使う。
+**Designerでは`DataPropertyName`を空のままにする。** 設計時のDataSourceがない状態でバインド列にすると、VSが開閉・保存時に列を除去する場合がある。データ項目との対応は各`LoadDefinition`で実行時に設定する。
 構成回帰テストでは、全8画面・部品のデザイナーホストへの読み込みに加え、編集領域・グラフ部品をCodeDOMで保存・再生成して、タブとグリッド列の名前・数・データ項目との対応が残ることを検証する。実行時の保存・表示も検証する。
+VSで実際に保存したコピーを検証する場合は、`run-configuration-tests.ps1 -ProjectPath <コピーのcsproj> -OutputDirectory <テスト出力先>`を使う。[列が消える問題の調査記録](../docs/investigations/settings-designer-columns-2026-10-26.md)も参照。
 
 ## センサー取得に失敗した場合
 

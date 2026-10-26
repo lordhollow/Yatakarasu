@@ -33,6 +33,9 @@ namespace Yata.Settings
         }
         internal void LoadDefinition(PlotDefine definition)
         {
+            seriesNameColumn.DataPropertyName = "Name";
+            seriesIdColumn.DataPropertyName = "Id";
+            seriesColorColumn.DataPropertyName = "Color";
             caption.Text = definition.Name; unit.Text = definition.Unit; min.Text = Number(definition.Min); max.Text = Number(definition.Max); low.Text = Number(definition.LowLevelThreshold); high.Text = Number(definition.HighLevelThreshold);
             Series.Rows.Clear();
             foreach (var item in definition.Items) Series.Rows.Add(item.Name, item.Id, $"{item.Color.R},{item.Color.G},{item.Color.B},{item.Color.A}");

@@ -35,6 +35,12 @@ namespace Yata.Settings
             // AutoGenerateColumns is hidden from designer serialization, so set
             // it at the data-binding boundary as well as defining the UI columns.
             grid.AutoGenerateColumns = false;
+            gridPageColumn.DataPropertyName = "Page";
+            gridPageRowColumn.DataPropertyName = "PageRow";
+            gridColumnColumn.DataPropertyName = "Column";
+            gridCaptionColumn.DataPropertyName = "Caption";
+            gridCommandColumn.DataPropertyName = "Command";
+            gridOptionColumn.DataPropertyName = "Option";
             grid.DataSource = entries; UpdateStatus();
         }
         protected override void SaveDefinition(string path)

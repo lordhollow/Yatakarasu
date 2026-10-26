@@ -61,17 +61,14 @@ namespace Yata.Settings
             seriesAlternatingStyle.BackColor = System.Drawing.Color.FromArgb(245, 248, 252);
             this.series.AlternatingRowsDefaultCellStyle = seriesAlternatingStyle;
             this.seriesNameColumn.Name = "seriesNameColumn";
-            this.seriesNameColumn.DataPropertyName = "Name";
             this.seriesNameColumn.HeaderText = "表示名";
             this.seriesNameColumn.FillWeight = 90F;
             this.seriesNameColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
             this.seriesIdColumn.Name = "seriesIdColumn";
-            this.seriesIdColumn.DataPropertyName = "Id";
             this.seriesIdColumn.HeaderText = "センサーID";
             this.seriesIdColumn.FillWeight = 230F;
             this.seriesIdColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
             this.seriesColorColumn.Name = "seriesColorColumn";
-            this.seriesColorColumn.DataPropertyName = "Color";
             this.seriesColorColumn.HeaderText = "色 R,G,B[,A]";
             this.seriesColorColumn.FillWeight = 80F;
             this.seriesColorColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;

@@ -33,6 +33,13 @@ namespace Yata.Settings
 
         protected override void LoadDefinition(string path)
         {
+            // VS removes bound columns when no design-time DataSource exists.
+            // Define the UI in the designer, and map data only at runtime.
+            metersNameColumn.DataPropertyName = "Name";
+            metersUnitColumn.DataPropertyName = "Unit";
+            metersMinColumn.DataPropertyName = "Min";
+            metersMaxColumn.DataPropertyName = "Max";
+            metersIdColumn.DataPropertyName = "Id";
             var definition = new SensorDefine();
             definition.ReadFromFile(path, true);
             bool trimmed = definition.MeterDefines.Count > 6 || definition.PlotDefines.Count > 2;

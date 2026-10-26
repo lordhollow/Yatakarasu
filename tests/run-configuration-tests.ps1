@@ -1,14 +1,21 @@
-param([string]$Configuration = 'Debug')
+param([string]$Configuration = 'Debug', [string]$ProjectPath, [string]$OutputDirectory)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $vswherePath = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
 $msbuildPath = & $vswherePath -latest -products '*' -requires Microsoft.Component.MSBuild -find 'MSBuild/Current/Bin/amd64/MSBuild.exe' | Select-Object -First 1
 $compilerPath = & $vswherePath -latest -products '*' -requires Microsoft.Component.MSBuild -find 'MSBuild/Current/Bin/Roslyn/csc.exe' | Select-Object -First 1
 if (!$msbuildPath -or !$compilerPath) { throw 'Visual Studio MSBuild and C# compiler are required.' }
-$testOutput = Join-Path $PSScriptRoot "bin/Configuration/$Configuration"
+if (!$ProjectPath) { $ProjectPath = Join-Path $repoRoot 'Yata.sln' }
+if (!$OutputDirectory) { $OutputDirectory = Join-Path $PSScriptRoot "bin/Configuration/$Configuration" }
+$testOutput = [IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Path $testOutput -Force | Out-Null
-& $msbuildPath (Join-Path $repoRoot 'Yata.sln') /t:Build "/p:Configuration=$Configuration" /p:Platform=x64 "/p:OutDir=$testOutput/" /nr:false /m:1 /nologo /v:minimal
+& $msbuildPath $ProjectPath /t:Build "/p:Configuration=$Configuration" /p:Platform=x64 "/p:OutDir=$testOutput/" /nr:false /m:1 /nologo /v:minimal
 if ($LASTEXITCODE -ne 0) { throw 'Build failed. Restore NuGet packages first.' }
+if ([IO.Path]::GetExtension($ProjectPath) -eq '.csproj') {
+    # A designer reproduction project does not include the companion executable.
+    & $msbuildPath (Join-Path $repoRoot 'Karasu/Karasu.csproj') /t:Build "/p:Configuration=$Configuration" /p:Platform=x64 "/p:OutDir=$testOutput/" /nr:false /m:1 /nologo /v:minimal
+    if ($LASTEXITCODE -ne 0) { throw 'Karasu build failed.' }
+}
 $testExe = Join-Path $testOutput 'ConfigurationRegression.exe'
 Copy-Item -LiteralPath (Join-Path $testOutput 'Yata.exe.config') -Destination "$testExe.config"
 & $compilerPath /nologo /target:exe /platform:x64 /langversion:7.3 "/out:$testExe" `

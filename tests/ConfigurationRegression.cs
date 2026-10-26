@@ -49,6 +49,7 @@ static class ConfigurationRegression
             Run("Configuration screens load, save and render", Forms);
             Run("Settings forms load in the WinForms designer without runtime data", DesignerForms);
             Run("Designer round trips retain editor content and grid columns", DesignerRoundTrips);
+            Run("Design-time grids stay unbound until runtime definitions load", DesignerBindingLifecycle);
             Run("Replacing widgets preserves unrelated cached drawings", WidgetReplacement);
             Run("Premultiplied layers preserve transparent composition", PremultipliedLayers);
             Run("Window drawing buffers retain full-size frames without shrinking", DrawingBufferCapacity);
@@ -370,6 +371,33 @@ static class ConfigurationRegression
         if (control is DataGridView grid)
             result += "[" + string.Join(",", grid.Columns.Cast<DataGridViewColumn>().Select(column => column.Name + "=" + column.DataPropertyName + ":" + column.HeaderText)) + "]";
         return result + "(" + string.Join("|", control.Controls.Cast<Control>().Select(DesignerShape)) + ")";
+    }
+    static void DesignerBindingLifecycle()
+    {
+        using (var sensor = new SensorSettingsForm())
+        using (var launcher = new LauncherSettingsForm())
+        using (var plot = new PlotEditor())
+        {
+            CheckUnboundDesignerGrids(sensor); CheckUnboundDesignerGrids(launcher); CheckUnboundDesignerGrids(plot);
+            var choices = new List<SensorChoice>();
+            using (var runtime = new SensorSettingsForm(Path.Combine(root, "sensor.txt"), choices))
+            {
+                var grid = Find<DataGridView>(runtime);
+                Check(grid.Rows.Count == 6 && grid.Columns.Cast<DataGridViewColumn>().Select(column => column.DataPropertyName).SequenceEqual(new[] { "Name", "Unit", "Min", "Max", "Id" }), "Runtime meter mapping was not restored.");
+            }
+            plot.LoadDefinition(Sensors().PlotDefines[0]);
+            Check(plot.Series.Columns.Cast<DataGridViewColumn>().Select(column => column.DataPropertyName).SequenceEqual(new[] { "Name", "Id", "Color" }), "Runtime plot mapping was not restored.");
+            Check(plot.Read().Items.Count == 1, "Runtime plot rows could not be read.");
+            typeof(LauncherSettingsForm).GetMethod("LoadDefinition", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(launcher, new object[] { Path.Combine(root, "karasu.exec.txt") });
+            Check(Find<DataGridView>(launcher).Columns.Cast<DataGridViewColumn>().Select(column => column.DataPropertyName).SequenceEqual(new[] { "Page", "PageRow", "Column", "Caption", "Command", "Option" }), "Runtime launcher mapping was not restored.");
+        }
+    }
+    static void CheckUnboundDesignerGrids(Control control)
+    {
+        if (control is DataGridView grid)
+            Check(grid.DataSource == null && grid.Columns.Count > 0 && grid.Columns.Cast<DataGridViewColumn>().All(column => string.IsNullOrEmpty(column.DataPropertyName)), "VS can remove bound columns without a design-time DataSource: " + grid.Name);
+        foreach (Control child in control.Controls) CheckUnboundDesignerGrids(child);
     }
     static T Find<T>(Control parent) where T : Control
     {
