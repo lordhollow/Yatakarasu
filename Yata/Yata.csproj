@@ -188,6 +188,18 @@
     </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <EmbeddedResource Include="Settings\ConfigurationEditorForm.resx">
+      <DependentUpon>ConfigurationEditorForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Settings\LauncherEntryForm.resx">
+      <DependentUpon>LauncherEntryForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Settings\LauncherSettingsForm.resx">
+      <DependentUpon>LauncherSettingsForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Settings\SensorSettingsForm.resx">
+      <DependentUpon>SensorSettingsForm.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="YataMain.resx">
       <DependentUpon>YataMain.cs</DependentUpon>
     </EmbeddedResource>

@@ -41,58 +41,73 @@
             this.plot1Tab.SuspendLayout();
             this.plot2Tab.SuspendLayout();
             this.SuspendLayout();
-            //
+            // 
             // Body
-            //
+            // 
             this.Body.Controls.Add(this.tabs);
             this.Body.Controls.Add(this.note);
-            //
+            // 
             // meters
-            //
+            // 
             this.meters.AllowUserToAddRows = false;
             this.meters.AllowUserToDeleteRows = false;
             dataGridViewCellStyle1.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(245)))), ((int)(((byte)(248)))), ((int)(((byte)(252)))));
             this.meters.AlternatingRowsDefaultCellStyle = dataGridViewCellStyle1;
             this.meters.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.Fill;
             this.meters.BackgroundColor = System.Drawing.Color.White;
-            this.meters.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.meters.Location = new System.Drawing.Point(3, 49);
-            this.meters.MultiSelect = false;
-            this.meters.Name = "meters";
             this.meters.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[] {
             this.metersNameColumn,
             this.metersUnitColumn,
             this.metersMinColumn,
             this.metersMaxColumn,
             this.metersIdColumn});
-            this.metersNameColumn.HeaderText = "表示名";
-            this.metersNameColumn.Name = "metersNameColumn";
-            this.metersNameColumn.FillWeight = 90F;
-            this.metersNameColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
-            this.metersUnitColumn.HeaderText = "単位";
-            this.metersUnitColumn.Name = "metersUnitColumn";
-            this.metersUnitColumn.FillWeight = 45F;
-            this.metersUnitColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
-            this.metersMinColumn.HeaderText = "最小";
-            this.metersMinColumn.Name = "metersMinColumn";
-            this.metersMinColumn.FillWeight = 45F;
-            this.metersMinColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
-            this.metersMaxColumn.HeaderText = "最大";
-            this.metersMaxColumn.Name = "metersMaxColumn";
-            this.metersMaxColumn.FillWeight = 45F;
-            this.metersMaxColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
-            this.metersIdColumn.HeaderText = "センサーID";
-            this.metersIdColumn.Name = "metersIdColumn";
-            this.metersIdColumn.FillWeight = 240F;
-            this.metersIdColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            this.meters.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.meters.Location = new System.Drawing.Point(3, 49);
+            this.meters.MultiSelect = false;
+            this.meters.Name = "meters";
             this.meters.RowHeadersVisible = false;
             this.meters.RowTemplate.Height = 27;
             this.meters.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
             this.meters.Size = new System.Drawing.Size(1034, 510);
             this.meters.TabIndex = 0;
-            //
+            // 
+            // metersNameColumn
+            // 
+            this.metersNameColumn.FillWeight = 90F;
+            this.metersNameColumn.HeaderText = "表示名";
+            this.metersNameColumn.Name = "metersNameColumn";
+            this.metersNameColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            // 
+            // metersUnitColumn
+            // 
+            this.metersUnitColumn.FillWeight = 45F;
+            this.metersUnitColumn.HeaderText = "単位";
+            this.metersUnitColumn.Name = "metersUnitColumn";
+            this.metersUnitColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            // 
+            // metersMinColumn
+            // 
+            this.metersMinColumn.FillWeight = 45F;
+            this.metersMinColumn.HeaderText = "最小";
+            this.metersMinColumn.Name = "metersMinColumn";
+            this.metersMinColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            // 
+            // metersMaxColumn
+            // 
+            this.metersMaxColumn.FillWeight = 45F;
+            this.metersMaxColumn.HeaderText = "最大";
+            this.metersMaxColumn.Name = "metersMaxColumn";
+            this.metersMaxColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            // 
+            // metersIdColumn
+            // 
+            this.metersIdColumn.FillWeight = 240F;
+            this.metersIdColumn.HeaderText = "センサーID";
+            this.metersIdColumn.Name = "metersIdColumn";
+            this.metersIdColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            // 
             // selectMeterButton
-            //
+            // 
             this.selectMeterButton.AutoSize = true;
             this.selectMeterButton.Location = new System.Drawing.Point(8, 8);
             this.selectMeterButton.Margin = new System.Windows.Forms.Padding(4);
@@ -103,9 +118,9 @@
             this.selectMeterButton.Text = "センサーを選択…";
             this.selectMeterButton.UseVisualStyleBackColor = true;
             this.selectMeterButton.Click += new System.EventHandler(this.SelectMeterButton_Click);
-            //
+            // 
             // clearMeterButton
-            //
+            // 
             this.clearMeterButton.AutoSize = true;
             this.clearMeterButton.Location = new System.Drawing.Point(115, 8);
             this.clearMeterButton.Margin = new System.Windows.Forms.Padding(4);
@@ -116,9 +131,9 @@
             this.clearMeterButton.Text = "選択を解除";
             this.clearMeterButton.UseVisualStyleBackColor = true;
             this.clearMeterButton.Click += new System.EventHandler(this.ClearMeterButton_Click);
-            //
+            // 
             // meterCommands
-            //
+            // 
             this.meterCommands.AutoSize = true;
             this.meterCommands.Controls.Add(this.selectMeterButton);
             this.meterCommands.Controls.Add(this.clearMeterButton);
@@ -128,9 +143,9 @@
             this.meterCommands.Padding = new System.Windows.Forms.Padding(4);
             this.meterCommands.Size = new System.Drawing.Size(1034, 46);
             this.meterCommands.TabIndex = 1;
-            //
+            // 
             // tabs
-            //
+            // 
             this.tabs.Controls.Add(this.meterTab);
             this.tabs.Controls.Add(this.plot1Tab);
             this.tabs.Controls.Add(this.plot2Tab);
@@ -140,9 +155,9 @@
             this.tabs.SelectedIndex = 0;
             this.tabs.Size = new System.Drawing.Size(1048, 590);
             this.tabs.TabIndex = 0;
-            //
+            // 
             // meterTab
-            //
+            // 
             this.meterTab.Controls.Add(this.meters);
             this.meterTab.Controls.Add(this.meterCommands);
             this.meterTab.Location = new System.Drawing.Point(4, 24);
@@ -152,9 +167,9 @@
             this.meterTab.TabIndex = 0;
             this.meterTab.Text = "タコメーター（6個）";
             this.meterTab.UseVisualStyleBackColor = true;
-            //
+            // 
             // plot1Tab
-            //
+            // 
             this.plot1Tab.Controls.Add(this.plot1);
             this.plot1Tab.Location = new System.Drawing.Point(4, 24);
             this.plot1Tab.Name = "plot1Tab";
@@ -163,9 +178,9 @@
             this.plot1Tab.TabIndex = 1;
             this.plot1Tab.Text = "グラフ 1";
             this.plot1Tab.UseVisualStyleBackColor = true;
-            //
+            // 
             // plot1
-            //
+            // 
             this.plot1.Dock = System.Windows.Forms.DockStyle.Fill;
             this.plot1.Location = new System.Drawing.Point(3, 3);
             this.plot1.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
@@ -174,9 +189,9 @@
             this.plot1.TabIndex = 0;
             this.plot1.SelectRequested += new System.Action(this.Plot1_SelectRequested);
             this.plot1.Changed += new System.Action(this.Plot_Changed);
-            //
+            // 
             // plot2Tab
-            //
+            // 
             this.plot2Tab.Controls.Add(this.plot2);
             this.plot2Tab.Location = new System.Drawing.Point(4, 24);
             this.plot2Tab.Name = "plot2Tab";
@@ -185,9 +200,9 @@
             this.plot2Tab.TabIndex = 2;
             this.plot2Tab.Text = "グラフ 2";
             this.plot2Tab.UseVisualStyleBackColor = true;
-            //
+            // 
             // plot2
-            //
+            // 
             this.plot2.Dock = System.Windows.Forms.DockStyle.Fill;
             this.plot2.Location = new System.Drawing.Point(3, 3);
             this.plot2.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
@@ -196,9 +211,9 @@
             this.plot2.TabIndex = 0;
             this.plot2.SelectRequested += new System.Action(this.Plot2_SelectRequested);
             this.plot2.Changed += new System.Action(this.Plot_Changed);
-            //
+            // 
             // note
-            //
+            // 
             this.note.AutoSize = true;
             this.note.Dock = System.Windows.Forms.DockStyle.Bottom;
             this.note.Location = new System.Drawing.Point(8, 598);
@@ -207,9 +222,9 @@
             this.note.Size = new System.Drawing.Size(437, 15);
             this.note.TabIndex = 1;
             this.note.Text = "タコメーター6個・グラフ2個。未設定のIDは「-」。センサーIDは平均・合計の式も入力できます。";
-            //
+            // 
             // SensorSettingsForm
-            //
+            // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.ClientSize = new System.Drawing.Size(1064, 721);
             this.Name = "SensorSettingsForm";

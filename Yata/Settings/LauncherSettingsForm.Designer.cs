@@ -35,25 +35,21 @@
             ((System.ComponentModel.ISupportInitialize)(this.grid)).BeginInit();
             this.commandsPanel.SuspendLayout();
             this.SuspendLayout();
-            //
+            // 
             // Body
-            //
+            // 
             this.Body.Controls.Add(this.grid);
             this.Body.Controls.Add(this.commandsPanel);
             this.Body.Controls.Add(this.status);
-            //
+            // 
             // grid
-            //
+            // 
             this.grid.AllowUserToAddRows = false;
             this.grid.AllowUserToDeleteRows = false;
             dataGridViewCellStyle1.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(245)))), ((int)(((byte)(248)))), ((int)(((byte)(252)))));
             this.grid.AlternatingRowsDefaultCellStyle = dataGridViewCellStyle1;
             this.grid.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.Fill;
             this.grid.BackgroundColor = System.Drawing.Color.White;
-            this.grid.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.grid.Location = new System.Drawing.Point(8, 54);
-            this.grid.MultiSelect = false;
-            this.grid.Name = "grid";
             this.grid.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[] {
             this.gridPageColumn,
             this.gridPageRowColumn,
@@ -61,30 +57,10 @@
             this.gridCaptionColumn,
             this.gridCommandColumn,
             this.gridOptionColumn});
-            this.gridPageColumn.HeaderText = "ページ";
-            this.gridPageColumn.Name = "gridPageColumn";
-            this.gridPageColumn.FillWeight = 35F;
-            this.gridPageColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
-            this.gridPageRowColumn.HeaderText = "行 (0/1)";
-            this.gridPageRowColumn.Name = "gridPageRowColumn";
-            this.gridPageRowColumn.FillWeight = 35F;
-            this.gridPageRowColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
-            this.gridColumnColumn.HeaderText = "列";
-            this.gridColumnColumn.Name = "gridColumnColumn";
-            this.gridColumnColumn.FillWeight = 30F;
-            this.gridColumnColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
-            this.gridCaptionColumn.HeaderText = "表示名";
-            this.gridCaptionColumn.Name = "gridCaptionColumn";
-            this.gridCaptionColumn.FillWeight = 95F;
-            this.gridCaptionColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
-            this.gridCommandColumn.HeaderText = "コマンド";
-            this.gridCommandColumn.Name = "gridCommandColumn";
-            this.gridCommandColumn.FillWeight = 180F;
-            this.gridCommandColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
-            this.gridOptionColumn.HeaderText = "起動オプション";
-            this.gridOptionColumn.Name = "gridOptionColumn";
-            this.gridOptionColumn.FillWeight = 130F;
-            this.gridOptionColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            this.grid.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.grid.Location = new System.Drawing.Point(8, 54);
+            this.grid.MultiSelect = false;
+            this.grid.Name = "grid";
             this.grid.ReadOnly = true;
             this.grid.RowHeadersVisible = false;
             this.grid.RowTemplate.Height = 27;
@@ -92,9 +68,57 @@
             this.grid.Size = new System.Drawing.Size(1048, 544);
             this.grid.TabIndex = 0;
             this.grid.DoubleClick += new System.EventHandler(this.Grid_DoubleClick);
-            //
+            // 
+            // gridPageColumn
+            // 
+            this.gridPageColumn.FillWeight = 35F;
+            this.gridPageColumn.HeaderText = "ページ";
+            this.gridPageColumn.Name = "gridPageColumn";
+            this.gridPageColumn.ReadOnly = true;
+            this.gridPageColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            // 
+            // gridPageRowColumn
+            // 
+            this.gridPageRowColumn.FillWeight = 35F;
+            this.gridPageRowColumn.HeaderText = "行 (0/1)";
+            this.gridPageRowColumn.Name = "gridPageRowColumn";
+            this.gridPageRowColumn.ReadOnly = true;
+            this.gridPageRowColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            // 
+            // gridColumnColumn
+            // 
+            this.gridColumnColumn.FillWeight = 30F;
+            this.gridColumnColumn.HeaderText = "列";
+            this.gridColumnColumn.Name = "gridColumnColumn";
+            this.gridColumnColumn.ReadOnly = true;
+            this.gridColumnColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            // 
+            // gridCaptionColumn
+            // 
+            this.gridCaptionColumn.FillWeight = 95F;
+            this.gridCaptionColumn.HeaderText = "表示名";
+            this.gridCaptionColumn.Name = "gridCaptionColumn";
+            this.gridCaptionColumn.ReadOnly = true;
+            this.gridCaptionColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            // 
+            // gridCommandColumn
+            // 
+            this.gridCommandColumn.FillWeight = 180F;
+            this.gridCommandColumn.HeaderText = "コマンド";
+            this.gridCommandColumn.Name = "gridCommandColumn";
+            this.gridCommandColumn.ReadOnly = true;
+            this.gridCommandColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            // 
+            // gridOptionColumn
+            // 
+            this.gridOptionColumn.FillWeight = 130F;
+            this.gridOptionColumn.HeaderText = "起動オプション";
+            this.gridOptionColumn.Name = "gridOptionColumn";
+            this.gridOptionColumn.ReadOnly = true;
+            this.gridOptionColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            // 
             // addButton
-            //
+            // 
             this.addButton.AutoSize = true;
             this.addButton.Location = new System.Drawing.Point(8, 8);
             this.addButton.Margin = new System.Windows.Forms.Padding(4);
@@ -105,9 +129,9 @@
             this.addButton.Text = "項目を追加…";
             this.addButton.UseVisualStyleBackColor = true;
             this.addButton.Click += new System.EventHandler(this.AddButton_Click);
-            //
+            // 
             // editButton
-            //
+            // 
             this.editButton.AutoSize = true;
             this.editButton.Location = new System.Drawing.Point(106, 8);
             this.editButton.Margin = new System.Windows.Forms.Padding(4);
@@ -118,9 +142,9 @@
             this.editButton.Text = "編集…";
             this.editButton.UseVisualStyleBackColor = true;
             this.editButton.Click += new System.EventHandler(this.EditButton_Click);
-            //
+            // 
             // duplicateButton
-            //
+            // 
             this.duplicateButton.AutoSize = true;
             this.duplicateButton.Location = new System.Drawing.Point(204, 8);
             this.duplicateButton.Margin = new System.Windows.Forms.Padding(4);
@@ -131,9 +155,9 @@
             this.duplicateButton.Text = "複製…";
             this.duplicateButton.UseVisualStyleBackColor = true;
             this.duplicateButton.Click += new System.EventHandler(this.DuplicateButton_Click);
-            //
+            // 
             // deleteButton
-            //
+            // 
             this.deleteButton.AutoSize = true;
             this.deleteButton.Location = new System.Drawing.Point(302, 8);
             this.deleteButton.Margin = new System.Windows.Forms.Padding(4);
@@ -144,9 +168,9 @@
             this.deleteButton.Text = "削除";
             this.deleteButton.UseVisualStyleBackColor = true;
             this.deleteButton.Click += new System.EventHandler(this.DeleteButton_Click);
-            //
+            // 
             // addPageButton
-            //
+            // 
             this.addPageButton.AutoSize = true;
             this.addPageButton.Location = new System.Drawing.Point(400, 8);
             this.addPageButton.Margin = new System.Windows.Forms.Padding(4);
@@ -157,9 +181,9 @@
             this.addPageButton.Text = "ページを追加";
             this.addPageButton.UseVisualStyleBackColor = true;
             this.addPageButton.Click += new System.EventHandler(this.AddPageButton_Click);
-            //
+            // 
             // commandsPanel
-            //
+            // 
             this.commandsPanel.AutoSize = true;
             this.commandsPanel.Controls.Add(this.addButton);
             this.commandsPanel.Controls.Add(this.editButton);
@@ -172,9 +196,9 @@
             this.commandsPanel.Padding = new System.Windows.Forms.Padding(4);
             this.commandsPanel.Size = new System.Drawing.Size(1048, 46);
             this.commandsPanel.TabIndex = 1;
-            //
+            // 
             // status
-            //
+            // 
             this.status.AutoSize = true;
             this.status.Dock = System.Windows.Forms.DockStyle.Bottom;
             this.status.Location = new System.Drawing.Point(8, 598);
@@ -183,9 +207,9 @@
             this.status.Size = new System.Drawing.Size(351, 15);
             this.status.TabIndex = 2;
             this.status.Text = "1ページ = 2行 × 16列。右クリックメニューからもページを切り替えられます。";
-            //
+            // 
             // LauncherSettingsForm
-            //
+            // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.ClientSize = new System.Drawing.Size(1064, 721);
             this.Name = "LauncherSettingsForm";
