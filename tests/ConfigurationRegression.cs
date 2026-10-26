@@ -13,6 +13,8 @@ using Yata.Components.Configuration;
 using Yata.Components.Widget;
 using Yata.Settings;
 using Yata;
+using ISensor = LibreHardwareMonitor.Hardware.ISensor;
+using IHardware = LibreHardwareMonitor.Hardware.IHardware;
 
 static class ConfigurationRegression
 {
@@ -51,6 +53,7 @@ static class ConfigurationRegression
             Run("Loaded images preserve composition and release source files", DrawingImages);
             Run("Launcher focus fades and clears for every image source", LauncherFocus);
             Run("Page fault recording marks concurrency and waits for active scopes", PageFaultRecording);
+            Run("NVIDIA optional queries restore selected sensors and aggregates", NvidiaQueries);
             Console.WriteLine("All " + passed + " configuration checks passed.");
             foreach (var image in images) Console.WriteLine("PREVIEW: " + image);
             return 0;
@@ -458,6 +461,45 @@ static class ConfigurationRegression
         PageFaultDiagnostics.Start(TimeSpan.FromMilliseconds(1), directory);
         System.Threading.Thread.Sleep(20);
         Check(PageFaultDiagnostics.Complete() != null, "Expired recording did not complete automatically.");
+    }
+    static void NvidiaQueries()
+    {
+        // Real library types and readonly fields, with no constructor, Update,
+        // driver initialization, control setting or Close call.
+        var assembly = typeof(ISensor).Assembly;
+        var type = assembly.GetType("LibreHardwareMonitor.Hardware.Gpu.NvidiaGpu", true);
+        var device = (IHardware)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(type);
+        var powerField = type.GetField("_powers", BindingFlags.Instance | BindingFlags.NonPublic);
+        var voltageField = type.GetField("_coreVoltage", BindingFlags.Instance | BindingFlags.NonPublic);
+        var sensorType = voltageField.FieldType;
+        var owner = sensorType.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+            .Single(field => typeof(IHardware).IsAssignableFrom(field.FieldType));
+        Func<ISensor> sensor = () =>
+        {
+            var result = (ISensor)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(sensorType);
+            owner.SetValue(result, device); return result;
+        };
+        var first = sensor(); var second = sensor(); var voltage = sensor();
+        var powers = Array.CreateInstance(sensorType, 2); powers.SetValue(first, 0); powers.SetValue(second, 1);
+        powerField.SetValue(device, powers); voltageField.SetValue(device, voltage);
+        var policy = new NvidiaOptionalQueries();
+        policy.Configure(new[] { device }, new HashSet<ISensor>());
+        Check(powerField.GetValue(device) == null && voltageField.GetValue(device) == null, "Unused expensive queries remained enabled.");
+        policy.Configure(new[] { device }, new HashSet<ISensor> { second });
+        Check(ReferenceEquals(powerField.GetValue(device), powers) && voltageField.GetValue(device) == null, "Selecting one power ratio did not restore its group.");
+        policy.Configure(new[] { device }, new HashSet<ISensor> { voltage });
+        Check(powerField.GetValue(device) == null && ReferenceEquals(voltageField.GetValue(device), voltage), "Selecting voltage restored the wrong query.");
+        var aggregate = new ValueHistorySensor(new[] { first, second }, new LibreHardwareMonitor.Hardware.Identifier("test", "sum"), true);
+        policy.Configure(new[] { device }, new HashSet<ISensor>(aggregate.SourceSensors));
+        Check(ReferenceEquals(powerField.GetValue(device), powers), "An aggregate lost its underlying power sensors.");
+        policy.Configure(new[] { device }, new HashSet<ISensor>());
+        policy.Configure(new[] { device }, new HashSet<ISensor>(new ValueHistorySensor(aggregate).SourceSensors));
+        Check(ReferenceEquals(powerField.GetValue(device), powers), "A wrapped aggregate lost its underlying power sensors.");
+        policy.Configure(new IHardware[0], new HashSet<ISensor>());
+        Check(ReferenceEquals(powerField.GetValue(device), powers) && ReferenceEquals(voltageField.GetValue(device), voltage), "Removing a device did not restore its original fields.");
+        policy.Configure(new[] { device }, new HashSet<ISensor>()); policy.Restore();
+        Check(ReferenceEquals(powerField.GetValue(device), powers) && ReferenceEquals(voltageField.GetValue(device), voltage), "Disposal restore changed sensor identity.");
+        Check(OptionalSensorQuery.Create(device, typeof(string).GetField("Empty")) == null, "Unrecognized field shape was accepted.");
     }
     static Bitmap RenderLayers(bool premultiplied, float brightness)
     {

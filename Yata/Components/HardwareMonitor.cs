@@ -6,6 +6,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Reflection.Emit;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -26,6 +27,7 @@ namespace Yata.Components
     {
         Computer computer;
         int updateInProgress;
+        NvidiaOptionalQueries nvidiaQueries;
 
         public static HardwareMonitor DefaultInstance { get; private set; }
 
@@ -102,6 +104,7 @@ namespace Yata.Components
             }
             UpdateTargetHardware = updateList;
             UpdateTargetSensor = sensList;
+            ConfigureOptionalQueries();
 
         }
 
@@ -185,6 +188,14 @@ namespace Yata.Components
             }
             UpdateTargetHardware = updateList;
             UpdateTargetSensor = sensList;
+            ConfigureOptionalQueries();
+        }
+
+        void ConfigureOptionalQueries()
+        {
+            if (nvidiaQueries == null) nvidiaQueries = new NvidiaOptionalQueries();
+            nvidiaQueries.Configure(UpdateTargetHardware, new HashSet<ISensor>(
+                UpdateTargetSensor.Cast<ValueHistorySensor>().SelectMany(sensor => sensor.SourceSensors)));
         }
 
         public async Task ReconfigureAsync(TimeSpan timeWindow, IEnumerable<string> sensorUsage)
@@ -276,6 +287,7 @@ namespace Yata.Components
 
         public void Dispose()
         {
+            nvidiaQueries?.Restore();
             computer.Close();
             computer = null;
         }
@@ -440,6 +452,21 @@ namespace Yata.Components
         public ValueHistorySensor(ISensor baseSensor)
         {
             this.baseSensor = baseSensor;
+        }
+
+        internal IEnumerable<ISensor> SourceSensors
+        {
+            get
+            {
+                foreach (var sensor in baseSensors ?? new[] { baseSensor })
+                {
+                    if (sensor is ValueHistorySensor history)
+                    {
+                        foreach (var source in history.SourceSensors) yield return source;
+                    }
+                    else yield return sensor;
+                }
+            }
         }
 
         public ValueHistorySensor(ISensor[] baseSensors, Identifier newId, bool sumup)
@@ -655,6 +682,83 @@ namespace Yata.Components
         }
         public void VisitSensor(ISensor sensor) { }
         public void VisitParameter(IParameter parameter) { }
+    }
+
+    // LHM 0.9.6 polls every NVIDIA sensor on Update, including unused power ratios
+    // and voltage. Those two NVAPI calls allocate heavily on some drivers.
+    // Keep the original sensor objects so selecting them restores normal updates.
+    internal sealed class NvidiaOptionalQueries
+    {
+        readonly Dictionary<IHardware, List<OptionalSensorQuery>> devices = new Dictionary<IHardware, List<OptionalSensorQuery>>();
+        internal void Configure(IEnumerable<IHardware> hardware, ISet<ISensor> selected)
+        {
+            var active = new HashSet<IHardware>(hardware);
+            foreach (var entry in devices) if (!active.Contains(entry.Key)) foreach (var query in entry.Value) query.Restore();
+            foreach (var device in active)
+            {
+                var type = device.GetType();
+                // Private field compatibility is explicit: other versions keep the
+                // library's normal behavior rather than guessing at its internals.
+                if (type.FullName != "LibreHardwareMonitor.Hardware.Gpu.NvidiaGpu" ||
+                    type.Assembly.GetName().Version != new Version(0, 9, 6, 0)) continue;
+                List<OptionalSensorQuery> queries;
+                if (!devices.TryGetValue(device, out queries))
+                {
+                    queries = new List<OptionalSensorQuery>();
+                    foreach (var name in new[] { "_powers", "_coreVoltage" })
+                    {
+                        var field = type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+                        if (field == null) continue;
+                        var query = OptionalSensorQuery.Create(device, field);
+                        if (query != null) queries.Add(query);
+                    }
+                    devices.Add(device, queries);
+                }
+                foreach (var query in queries) query.Configure(selected);
+            }
+        }
+        internal void Restore() { foreach (var queries in devices.Values) foreach (var query in queries) query.Restore(); }
+    }
+
+    internal sealed class OptionalSensorQuery
+    {
+        readonly object device, original;
+        readonly FieldInfo field;
+        readonly ISensor[] sensors;
+        bool disabled;
+        OptionalSensorQuery(object device, FieldInfo field, object original, ISensor[] sensors)
+        { this.device = device; this.field = field; this.original = original; this.sensors = sensors; }
+        internal static OptionalSensorQuery Create(object device, FieldInfo field)
+        {
+            if (!typeof(ISensor).IsAssignableFrom(field.FieldType) &&
+                !(field.FieldType.IsArray && typeof(ISensor).IsAssignableFrom(field.FieldType.GetElementType()))) return null;
+            object original;
+            try { original = field.GetValue(device); }
+            catch (Exception ex) when (ex is FieldAccessException || ex is TargetException)
+            { Trace.TraceWarning("NVIDIA optional query compatibility: " + ex.Message); return null; }
+            if (original == null) return null;
+            var sensor = original as ISensor;
+            var sensors = sensor != null ? new[] { sensor } : ((Array)original).Cast<ISensor>().ToArray();
+            // A field whose contents do not belong to this hardware is not audited.
+            if (sensors.Length == 0 || sensors.Any(x => x == null || !ReferenceEquals(x.Hardware, device))) return null;
+            return new OptionalSensorQuery(device, field, original, sensors);
+        }
+        internal void Configure(ISet<ISensor> selected)
+        {
+            if (!disabled) Set(sensors.Any(selected.Contains) ? original : null);
+        }
+        internal void Restore() { if (!disabled) Set(original); }
+        void Set(object value)
+        {
+            try { field.SetValue(device, value); }
+            catch (Exception ex) when (ex is FieldAccessException || ex is ArgumentException || ex is TargetException)
+            {
+                // No sensor is made unavailable if a runtime rejects this binding.
+                try { field.SetValue(device, original); } catch (FieldAccessException) { }
+                disabled = true;
+                Trace.TraceWarning("NVIDIA optional query compatibility: " + ex.Message);
+            }
+        }
     }
 
     internal static class HardwareUpdateLog
