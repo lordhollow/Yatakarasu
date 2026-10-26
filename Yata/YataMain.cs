@@ -63,7 +63,11 @@ namespace Yata
             //非表示コンポーネント
             var sensorDefine = new SensorDefine();
             configurationPaths = ConfigurationPaths.Load();
-            sensorDefine.ReadFromFile(configurationPaths.SensorFile);
+            try { sensorDefine.ReadFromFile(configurationPaths.SensorFile); }
+            catch (Exception ex)
+            {
+                Shown += (sender, args) => MessageBox.Show(this, "センサー定義を読み込めません。右クリック → センサー選択・設定から修正してください。\r\n" + ex.Message, "センサー定義", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
             sensorDefine.EnsureFixedLayout();
             monitor = hwMonitorSetup(sensorDefine);
             container.Add(monitor);
@@ -181,7 +185,7 @@ namespace Yata
         private HardwareMonitor hwMonitorSetup(SensorDefine define)
         {
             var mon = new HardwareMonitor();
-            var sensorUsage = define.SensorUsage();
+            var sensorUsage = define.SensorUsage().Where(x => !string.IsNullOrWhiteSpace(x) && x != "-").Distinct();
             mon.Startup(sensorTimeWindow, sensorUsage);
             //var useSensor = mon.AllSensors.Where(x => sensorUsage.Contains(x.Identifier.ToString()));
             //mon.Startup(PlotLength, useSensor);
@@ -282,6 +286,7 @@ namespace Yata
                     tmUpdate.Enabled = false;
                     UseWaitCursor = true;
                     await monitor.ReconfigureAsync(sensorTimeWindow, dialog.ResultDefinition.SensorUsage().Where(x => !string.IsNullOrWhiteSpace(x) && x != "-").Distinct());
+                    if (IsDisposed || Disposing) return;
                     foreach (var widget in sensorWidgets) container.Remove(widget);
                     sensorWidgets.Clear();
                     SetupPlotWidgets(24, dialog.ResultDefinition, monitor, suspendChecker);
@@ -291,8 +296,8 @@ namespace Yata
                     container.Update(); Invalidate();
                 }
             }
-            catch (Exception ex) { EditorUi.Error(this, ex); }
-            finally { UseWaitCursor = false; tmUpdate.Enabled = true; settingsOpen = false; }
+            catch (Exception ex) { if (!IsDisposed) EditorUi.Error(this, ex); }
+            finally { if (!IsDisposed) { UseWaitCursor = false; tmUpdate.Enabled = true; } settingsOpen = false; }
         }
 
         void OpenLauncherSettings()

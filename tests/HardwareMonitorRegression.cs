@@ -27,12 +27,14 @@ static class HardwareMonitorRegression
             Run("Parallel failure isolation", () => FailureIsolation(true));
             Run("Sequential failure isolation", () => FailureIsolation(false));
             Run("Async updates cannot overlap", SingleFlight);
+            Run("Reconfiguration waits for an active update", Reconfiguration);
+            Run("Large sensor ranges are bounded by detected sensors", LargeSensorRange);
             Run("Async failures do not reach the UI context", AsyncFailure);
             Run("Startup visitor continues after a device failure", StartupFailure);
             Run("History snapshots and concurrent access", HistorySnapshots);
             Run("Missing samples do not become zero in aggregates", MissingAggregate);
             Run("Widgets accept missing values and recover", MissingWidgets);
-            Console.WriteLine("All 10 regression checks passed.");
+            Console.WriteLine("All 12 regression checks passed.");
             return 0;
         }
         catch (Exception ex)
@@ -154,6 +156,43 @@ static class HardwareMonitorRegression
             monitor.Update();
             Check(hardware.Calls == 2, "Update gate was not released.");
         }
+    }
+
+    static void Reconfiguration()
+    {
+        var hardware = new FakeHardware("reconfigure-slow");
+        var monitor = Monitor(new FakeSensor(hardware));
+        var replacement = new FakeSensor(new FakeHardware("replacement"));
+        using (var entered = new ManualResetEventSlim())
+        using (var release = new ManualResetEventSlim())
+        {
+            hardware.OnUpdate = () => { entered.Set(); Check(release.Wait(5000), "Update timed out."); };
+            monitor.UpdateAsync = true; monitor.Update();
+            Check(entered.Wait(5000), "Async update did not start.");
+            monitor.AllSensorsForTest(replacement);
+            var configure = monitor.ReconfigureAsync(TimeSpan.FromMinutes(12), new[] { replacement.Identifier.ToString() });
+            try { Check(!configure.IsCompleted, "Reconfiguration raced with an active update."); }
+            finally { release.Set(); }
+            Check(configure.Wait(5000), "Reconfiguration did not finish.");
+            Check(monitor.UpdateTargetHardware.Single() == replacement.Hardware, "New hardware selection was not applied.");
+        }
+    }
+
+    static void AllSensorsForTest(this HardwareMonitor monitor, ISensor sensor)
+    {
+        typeof(HardwareMonitor).GetProperty("AllSensors").GetSetMethod(true).Invoke(monitor, new object[] { new List<ISensor> { sensor } });
+    }
+
+    static void LargeSensorRange()
+    {
+        var sample = new FakeSensor(new FakeHardware("range"));
+        var monitor = Monitor(sample);
+        monitor.AllSensorsForTest(sample);
+        var id = sample.Identifier.ToString();
+        var code = id.Substring(0, id.LastIndexOf('/') + 1) + "0-2147483647";
+        var configure = Task.Run(() => monitor.Startup(TimeSpan.FromMinutes(12), new[] { code }));
+        Check(configure.Wait(3000), "A large range caused an unbounded scan.");
+        Check(monitor.UpdateTargetSensor.Count == 1, "Range selection did not find the detected sensor.");
     }
 
     static void AsyncFailure()

@@ -36,15 +36,15 @@ namespace Yata.Components.Configuration
         public string LauncherFile { get; set; }
         static string PreferencesFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Yatakarasu", "configuration.xml");
 
-        public static ConfigurationPaths Load()
+        public static ConfigurationPaths Load(string preferencesFile = null)
         {
             var root = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "files");
             var paths = new ConfigurationPaths { SensorFile = Path.Combine(root, "sensor.txt"), LauncherFile = Path.Combine(root, "karasu.exec.txt") };
             try
             {
-                if (File.Exists(PreferencesFile))
+                if (File.Exists(preferencesFile ?? PreferencesFile))
                 {
-                    var xml = XElement.Load(PreferencesFile);
+                    var xml = XElement.Load(preferencesFile ?? PreferencesFile);
                     paths.SensorFile = Existing((string)xml.Element("SensorFile"), paths.SensorFile);
                     paths.LauncherFile = Existing((string)xml.Element("LauncherFile"), paths.LauncherFile);
                 }
@@ -55,6 +55,6 @@ namespace Yata.Components.Configuration
         }
 
         static string Existing(string selected, string fallback) => !string.IsNullOrWhiteSpace(selected) && File.Exists(selected) ? Path.GetFullPath(selected) : fallback;
-        public void Save() => ConfigurationFile.Save(PreferencesFile, new XElement("Configuration", new XElement("SensorFile", SensorFile), new XElement("LauncherFile", LauncherFile)).ToString());
+        public void Save(string preferencesFile = null) => ConfigurationFile.Save(preferencesFile ?? PreferencesFile, new XElement("Configuration", new XElement("SensorFile", SensorFile), new XElement("LauncherFile", LauncherFile)).ToString());
     }
 }

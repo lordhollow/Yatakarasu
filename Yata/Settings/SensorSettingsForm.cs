@@ -75,7 +75,7 @@ namespace Yata.Settings
                 if (picker.ShowDialog(this) == DialogResult.OK)
                 {
                     grid.CurrentRow.Cells["Id"].Value = picker.SelectedSensor.Id;
-                    if (string.IsNullOrWhiteSpace(Cell(grid.CurrentRow, "Name")) || Cell(grid.CurrentRow, "Name") == "未設定") grid.CurrentRow.Cells["Name"].Value = picker.SelectedSensor.Name;
+                    if (string.IsNullOrWhiteSpace(Cell(grid.CurrentRow, "Name")) || Cell(grid.CurrentRow, "Name") == "未設定" || Cell(grid.CurrentRow, "Name") == "項目") grid.CurrentRow.Cells["Name"].Value = picker.SelectedSensor.Name;
                     if (grid.Columns.Contains("Unit")) grid.CurrentRow.Cells["Unit"].Value = picker.SelectedSensor.Unit;
                     Dirty = true;
                 }

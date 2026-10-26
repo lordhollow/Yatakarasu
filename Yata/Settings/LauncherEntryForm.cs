@@ -21,13 +21,15 @@ namespace Yata.Settings
         readonly Label hint = new Label { Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(6), ForeColor = Color.DimGray };
         readonly PictureBox preview = new PictureBox { Size = new Size(80, 80), SizeMode = PictureBoxSizeMode.Zoom, BorderStyle = BorderStyle.FixedSingle };
         readonly string definitionPath;
+        readonly Func<LauncherEntry, bool> placementAvailable;
         readonly List<string> iconSources = new List<string>();
         Bitmap selectedIcon;
         public LauncherEntry Entry { get; private set; }
 
-        public LauncherEntryForm(LauncherEntry entry, string path)
+        public LauncherEntryForm(LauncherEntry entry, string path, Func<LauncherEntry, bool> placementAvailable = null)
         {
             definitionPath = path;
+            this.placementAvailable = placementAvailable;
             Text = "ランチャー項目の編集"; Size = new Size(900, 540); MinimumSize = new Size(760, 500); StartPosition = FormStartPosition.CenterParent; Font = SystemFonts.MessageBoxFont;
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 9, Padding = new Padding(12) };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105)); layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -128,6 +130,7 @@ namespace Yata.Settings
             {
                 var entry = new LauncherEntry { Row = ((int)page.Value - 1) * 2 + (int)row.Value, Column = (int)column.Value, Caption = caption.Text, Command = command.Text, Option = option.Text, IconPath = selectedIcon == null ? icon.Text : "" };
                 var check = new LauncherDefinition(); check.Entries.Add(entry); check.Validate();
+                if (placementAvailable != null && !placementAvailable(entry)) throw new FormatException("その位置には既に項目があります。ページ・行・列を変更してください。");
                 if (entry.Command.StartsWith("internal::") && !SystemApplicationCatalog.All.Any(x => "internal::" + x.Id == entry.Command) && entry.Command != "internal::SetDisplayToporogy") throw new FormatException("システムアプリを一覧から選択してください。");
                 if (selectedIcon != null) entry.IconPath = IconLibrary.Save(selectedIcon, definitionPath);
                 Entry = entry; DialogResult = DialogResult.OK;

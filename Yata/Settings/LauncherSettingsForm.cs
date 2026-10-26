@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Linq;
+using System.IO;
 using System.Windows.Forms;
 using Yata.Components.Configuration;
 
@@ -31,6 +32,9 @@ namespace Yata.Settings
             var loaded = LauncherDefinition.Load(path);
             definition = loaded;
             entries = new BindingList<LauncherEntry>(loaded.Entries.Select(x => x.Clone()).ToList());
+            foreach (var entry in entries)
+                if (!string.IsNullOrWhiteSpace(entry.IconPath) && !entry.IconPath.Contains("::") && !Path.IsPathRooted(entry.IconPath))
+                    entry.IconPath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path)), entry.IconPath));
             grid.DataSource = entries; UpdateStatus();
         }
         protected override void SaveDefinition(string path)
@@ -58,7 +62,7 @@ namespace Yata.Settings
         }
         void EditEntry(LauncherEntry entry, LauncherEntry original)
         {
-            using (var dialog = new LauncherEntryForm(entry, SelectedPath))
+            using (var dialog = new LauncherEntryForm(entry, SelectedPath, candidate => !entries.Any(x => !ReferenceEquals(x, original) && x.Row == candidate.Row && x.Column == candidate.Column)))
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                 {
                     var updated = dialog.Entry;
