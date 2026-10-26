@@ -79,6 +79,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Components\Configuration\IconLibrary.cs" />
+    <Compile Include="Components\DrawingBuffer.cs" />
     <Compile Include="Components\Configuration\SteamCatalog.cs" />
     <Compile Include="Components\Configuration\SystemApplicationCatalog.cs" />
     <Compile Include="Settings\EditorUi.cs" />

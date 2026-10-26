@@ -76,3 +76,40 @@ RGBの差は乗算済みアルファの量子化を考慮して各成分2まで�
 採取スクリプトはCSVと`.summary.json`を`tests/bin/PageFaultInvestigation/`に出力する。
 管理者で実行中のYataでもWMIから読み取れる範囲を採取し、プロセスの動作や設定は変更しない。
 もし修正後も大きな残差があれば、描画回数・HW機器別更新を分けた計測、またはWPR/WPAでスタック付きのメモリトレースを追加する。
+
+## 追補: PArgb適用後に残る約1万フォルト/秒
+
+利用者が描画に問題がないことと発生数の減少を確認した後、再起動済みのYataを再計測した。
+12秒指定、13標本、カウンター時刻差11.54秒で10,581フォルト/秒だった。
+Private Bytes・Working Set・Read/Write Bytesの差はいずれも0。CPUは1コア換算7.58%、システム全体のPages Input/sec平均は2.23。
+
+残る主要因として、WinFormsのダブルバッファの再確保を再現できた。
+この環境の`BufferedGraphicsManager.Current.MaximumBuffer`は既定で225×96。
+1280×800はその上限を超えるため、一時的な描画バッファをフレームごとに確保・破棄する。
+上限を超えるバッファを保持しない動作は[MaximumBufferの仕様](https://learn.microsoft.com/dotnet/api/system.drawing.bufferedgraphicscontext.maximumbuffer?view=netframework-4.8.1)にも記載されている。
+
+`run-graphics-page-fault-probe.ps1 -WindowBuffers`で、同じPArgb 3層をWinFormsの`WM_PAINT`経路へ渡して比較した。
+各ケース30回ウォームアップ後に200回×3組を測定し、各組で実際に230回の`OnPaint`が呼ばれることを確認する。
+ウィンドウは画面外に置き、空の`BeginPaint`クリップによる描画省略を避けるため、対象ウィンドウのDCを明示して全クライアント領域を描画する。
+
+| ケース | ページフォルト/フレーム（平均） | 所要ms/フレーム（平均） |
+| --- | ---: | ---: |
+| WinForms・既定の保持上限225×96 | 1002.362 | 3.807 |
+| WinForms・保持上限1281×801 | 0.005 | 2.831 |
+| BufferedGraphicsの直接呼び出し・既定上限 | 1002.005 | 3.804 |
+| BufferedGraphicsの直接呼び出し・保持上限拡大 | 0 | 2.746 |
+
+全ケースで測定中のGCは0回。約1002フォルト×毎秒10フレームは約1万フォルト/秒で、PArgb適用後の残差の規模と一致する。
+当初、画面外ウィンドウへの通常のInvalidate/Updateではダブルバッファ経路のOnPaintが呼ばれなかったため、その試行の数値は採用していない。
+
+`DrawingBuffer.EnsureCapacity()`を追加し、Yataの初期化時およびリサイズ・最小化からの復帰時に、実クライアント領域より1ピクセル大きい上限を確保する。
+他のウィンドウ用の大きな上限は縮めない。ダブルバッファ・更新間隔・描画内容は変更しない。
+約4 MiBのバッファを再利用する分、常駐メモリが増える場合があるが、毎フレームの確保・初回アクセス・破棄を避けられる。
+
+```powershell
+./tools/diagnostics/run-graphics-page-fault-probe.ps1 -WindowBuffers
+./tools/diagnostics/measure-process-page-faults.ps1 -DurationSeconds 30
+```
+
+今回も実行中Yataは停止・変更していない。通常のReleaseを再ビルド・再起動し、同じ表示状態で実プロセスの改善量を確認する必要がある。
+この後にも残る分については、時計などの小画像・テキスト描画やHW取得を切り分ける。

@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 
 // Replays Yata's drawing operations without opening Computer or controlling hardware.
-static class GraphicsPageFaultProbe
+static partial class GraphicsPageFaultProbe
 {
     [StructLayout(LayoutKind.Sequential)]
     struct MemoryCounters
@@ -32,12 +32,15 @@ static class GraphicsPageFaultProbe
         return counters;
     }
 
+    [STAThread]
     static int Main(string[] args)
     {
         try
         {
             var output = args.Length == 0 ? "graphics-page-faults.csv" : args[0];
             results.Add("case,round,iterations,elapsed_ms,total_page_faults,faults_per_iteration,private_bytes_delta,working_set_delta,gc0,gc1,gc2");
+            if (args.Length > 1 && args[1] == "--window-buffers") RunWindowBuffers();
+            else
             using (var background = Layer(PixelFormat.Format32bppArgb, Color.FromArgb(255, 30, 50, 80)))
             using (var widgets = Layer(PixelFormat.Format32bppArgb, Color.FromArgb(120, 0, 0, 0)))
             using (var overlay = Layer(PixelFormat.Format32bppArgb, Color.Transparent))

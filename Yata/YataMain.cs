@@ -117,6 +117,7 @@ namespace Yata
 #endif
 
             ClientSize = new Size((int)(container.Width * screenParameter.ScreenScale), (int)(container.Height * screenParameter.ScreenScale));
+            DrawingBuffer.EnsureCapacity(ClientSize);
             SetupSettingsMenu();
 
             tmUpdate.Enabled = true;
@@ -241,6 +242,7 @@ namespace Yata
             }
             else
             {
+                DrawingBuffer.EnsureCapacity(ClientSize);
                 ShowInTaskbar = false;
                 //最小化から戻るとき、一瞬TopMostを設定しないとタスクバーの前に出てこないみたいなので。
                 TopMost = true;

@@ -47,6 +47,7 @@ static class ConfigurationRegression
             Run("Configuration screens load, save and render", Forms);
             Run("Replacing widgets preserves unrelated cached drawings", WidgetReplacement);
             Run("Premultiplied layers preserve transparent composition", PremultipliedLayers);
+            Run("Window drawing buffers retain full-size frames without shrinking", DrawingBufferCapacity);
             Console.WriteLine("All " + passed + " configuration checks passed.");
             foreach (var image in images) Console.WriteLine("PREVIEW: " + image);
             return 0;
@@ -306,6 +307,23 @@ static class ConfigurationRegression
                     "Premultiplied alpha changed the rendered result beyond rounding tolerance.");
             }
         }
+    }
+    static void DrawingBufferCapacity()
+    {
+        var context = BufferedGraphicsManager.Current;
+        var original = context.MaximumBuffer;
+        try
+        {
+            context.MaximumBuffer = new Size(225, 96);
+            DrawingBuffer.EnsureCapacity(new Size(1280, 800));
+            Check(context.MaximumBuffer == new Size(1281, 801), "Full-size drawing buffer is not retained.");
+            DrawingBuffer.EnsureCapacity(new Size(320, 200));
+            DrawingBuffer.EnsureCapacity(Size.Empty);
+            Check(context.MaximumBuffer == new Size(1281, 801), "A smaller or minimized window shrank the buffer.");
+            DrawingBuffer.EnsureCapacity(new Size(1600, 900));
+            Check(context.MaximumBuffer == new Size(1601, 901), "Larger client dimensions were not handled.");
+        }
+        finally { context.MaximumBuffer = original; }
     }
     static Bitmap RenderLayers(bool premultiplied, float brightness)
     {
