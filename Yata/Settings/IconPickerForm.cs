@@ -7,32 +7,13 @@ using Yata.Components.Configuration;
 
 namespace Yata.Settings
 {
-    internal sealed class IconPickerForm : Form
+    internal sealed partial class IconPickerForm : Form
     {
         readonly List<IconCandidate> candidates = new List<IconCandidate>();
-        readonly ImageList images = new ImageList { ImageSize = new Size(48, 48), ColorDepth = ColorDepth.Depth32Bit };
-        readonly ListView list = new ListView { Dock = DockStyle.Fill, View = View.LargeIcon, MultiSelect = false, HideSelection = false, ShowItemToolTips = true };
-        readonly Label status = EditorUi.Label("Exe・DLL内のアイコン、ico・png・jpg画像から選べます。");
         public Bitmap SelectedImage { get; private set; }
-        public IconPickerForm(IEnumerable<string> sources)
+        public IconPickerForm() { InitializeComponent(); }
+        public IconPickerForm(IEnumerable<string> sources) : this()
         {
-            Text = "アイコンを選択"; Size = new Size(760, 540); MinimumSize = new Size(540, 360); StartPosition = FormStartPosition.CenterParent; Font = SystemFonts.MessageBoxFont;
-            list.LargeImageList = images;
-            var select = EditorUi.Button("このアイコンを使う", (s, e) =>
-            {
-                if (list.SelectedIndices.Count == 0) return;
-                SelectedImage = new Bitmap(candidates[list.SelectedIndices[0]].Image); DialogResult = DialogResult.OK;
-            });
-            list.DoubleClick += (s, e) => select.PerformClick();
-            var cancel = EditorUi.Button("キャンセル", (s, e) => { DialogResult = DialogResult.Cancel; });
-            Controls.Add(list);
-            Controls.Add(EditorUi.Toolbar(EditorUi.Button("ファイルを追加…", (s, e) =>
-            {
-                using (var dialog = new OpenFileDialog { Filter = "アイコン・画像・アプリ|*.exe;*.dll;*.ico;*.png;*.jpg;*.jpeg;*.bmp|すべてのファイル|*.*" })
-                    if (dialog.ShowDialog(this) == DialogResult.OK) AddSource(dialog.FileName);
-            }), status));
-            var footer = EditorUi.Toolbar(select, cancel); footer.Dock = DockStyle.Bottom; Controls.Add(footer);
-            AcceptButton = select; CancelButton = cancel;
             foreach (var source in sources) AddSource(source);
             if (candidates.Count == 0)
                 AddSource(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "files", "SystemApp.png"));
@@ -68,10 +49,18 @@ namespace Yata.Settings
             }
             catch (Exception ex) when (ex is IOException || ex is ArgumentException || ex is UnauthorizedAccessException || ex is OutOfMemoryException) { status.Text = "読み込めません: " + Path.GetFileName(path); }
         }
-        protected override void Dispose(bool disposing)
+        void SelectButton_Click(object sender, EventArgs e)
         {
-            if (disposing) { images.Dispose(); foreach (var candidate in candidates) candidate.Dispose(); }
-            base.Dispose(disposing);
+            if (list.SelectedIndices.Count == 0) return;
+            SelectedImage = new Bitmap(candidates[list.SelectedIndices[0]].Image); DialogResult = DialogResult.OK;
         }
+        void List_DoubleClick(object sender, EventArgs e) => selectButton.PerformClick();
+        void CancelButton_Click(object sender, EventArgs e) => DialogResult = DialogResult.Cancel;
+        void AddFileButton_Click(object sender, EventArgs e)
+        {
+            using (var dialog = new OpenFileDialog { Filter = "アイコン・画像・アプリ|*.exe;*.dll;*.ico;*.png;*.jpg;*.jpeg;*.bmp|すべてのファイル|*.*" })
+                if (dialog.ShowDialog(this) == DialogResult.OK) AddSource(dialog.FileName);
+        }
+        void DisposeCandidates() { foreach (var candidate in candidates) candidate.Dispose(); }
     }
 }

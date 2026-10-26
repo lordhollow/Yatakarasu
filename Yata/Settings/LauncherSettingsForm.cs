@@ -7,26 +7,23 @@ using Yata.Components.Configuration;
 
 namespace Yata.Settings
 {
-    internal sealed class LauncherSettingsForm : ConfigurationEditorForm
+    internal sealed partial class LauncherSettingsForm : ConfigurationEditorForm
     {
-        readonly DataGridView grid = EditorUi.Grid(false);
-        readonly Label status = EditorUi.Label("1ページ = 2行 × 16列。右クリックメニューからもページを切り替えられます。");
         LauncherDefinition definition;
         BindingList<LauncherEntry> entries;
-        public LauncherSettingsForm(string path) : base("ランチャー編集", path)
+        public LauncherSettingsForm() { InitializeComponent(); }
+        public LauncherSettingsForm(string path) : this()
         {
-            EditorUi.Column(grid, "Page", "ページ", 35);
-            EditorUi.Column(grid, "PageRow", "行 (0/1)", 35);
-            EditorUi.Column(grid, "Column", "列", 30);
-            EditorUi.Column(grid, "Caption", "表示名", 95);
-            EditorUi.Column(grid, "Command", "コマンド", 180);
-            EditorUi.Column(grid, "Option", "起動オプション", 130);
-            grid.DoubleClick += (s, e) => Edit();
-            Body.Controls.Add(grid);
-            Body.Controls.Add(EditorUi.Toolbar(EditorUi.Button("項目を追加…", (s, e) => Add()), EditorUi.Button("編集…", (s, e) => Edit()), EditorUi.Button("複製…", (s, e) => Duplicate()), EditorUi.Button("削除", (s, e) => Delete()), EditorUi.Button("ページを追加", (s, e) => AddPage())));
-            status.Dock = DockStyle.Bottom; Body.Controls.Add(status);
+            SetPath(path);
             InitializeDefinition();
         }
+        void AddButton_Click(object sender, EventArgs e) => Add();
+        void EditButton_Click(object sender, EventArgs e) => Edit();
+        void DuplicateButton_Click(object sender, EventArgs e) => Duplicate();
+        void DeleteButton_Click(object sender, EventArgs e) => Delete();
+        void AddPageButton_Click(object sender, EventArgs e) => AddPage();
+        void Grid_DoubleClick(object sender, EventArgs e) => Edit();
+
         protected override void LoadDefinition(string path)
         {
             var loaded = LauncherDefinition.Load(path);

@@ -83,12 +83,55 @@
     <Compile Include="Components\Configuration\SteamCatalog.cs" />
     <Compile Include="Components\Configuration\SystemApplicationCatalog.cs" />
     <Compile Include="Settings\EditorUi.cs" />
-    <Compile Include="Settings\SensorPickerForm.cs" />
-    <Compile Include="Settings\SensorSettingsForm.cs" />
-    <Compile Include="Settings\IconPickerForm.cs" />
-    <Compile Include="Settings\SteamPickerForm.cs" />
-    <Compile Include="Settings\LauncherEntryForm.cs" />
-    <Compile Include="Settings\LauncherSettingsForm.cs" />
+    <Compile Include="Settings\SensorChoice.cs" />
+    <Compile Include="Settings\ConfigurationEditorForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Settings\ConfigurationEditorForm.Designer.cs">
+      <DependentUpon>ConfigurationEditorForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Settings\PlotEditor.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Settings\PlotEditor.Designer.cs">
+      <DependentUpon>PlotEditor.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Settings\SensorSettingsForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Settings\SensorSettingsForm.Designer.cs">
+      <DependentUpon>SensorSettingsForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Settings\LauncherSettingsForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Settings\LauncherSettingsForm.Designer.cs">
+      <DependentUpon>LauncherSettingsForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Settings\LauncherEntryForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Settings\LauncherEntryForm.Designer.cs">
+      <DependentUpon>LauncherEntryForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Settings\SensorPickerForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Settings\SensorPickerForm.Designer.cs">
+      <DependentUpon>SensorPickerForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Settings\IconPickerForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Settings\IconPickerForm.Designer.cs">
+      <DependentUpon>IconPickerForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Settings\SteamPickerForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Settings\SteamPickerForm.Designer.cs">
+      <DependentUpon>SteamPickerForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="Components\Configuration\ConfigurationFile.cs" />
     <Compile Include="Components\Configuration\LauncherDefinition.cs" />
     <Compile Include="Components\Application\MonitorPowerOff.cs" />

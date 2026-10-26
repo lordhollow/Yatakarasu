@@ -8,33 +8,30 @@ using Yata.Components.Configuration;
 
 namespace Yata.Settings
 {
-    internal sealed class SteamPickerForm : Form
+    internal sealed partial class SteamPickerForm : Form
     {
-        readonly TextBox root = new TextBox { Width = 420 };
-        readonly TextBox search = new TextBox { Width = 420 };
-        readonly ListBox games = new ListBox { Dock = DockStyle.Fill, IntegralHeight = false, HorizontalScrollbar = true };
-        readonly Label status = EditorUi.Label("Steamライブラリを検索しています…");
         List<SteamGame> installed = new List<SteamGame>();
         int revision;
         public SteamGame SelectedGame { get; private set; }
-        public SteamPickerForm()
+        public SteamPickerForm() { InitializeComponent(); }
+        void Picker_Shown(object sender, EventArgs e)
         {
-            Text = "インストール済みSteamソフトを選択"; Size = new Size(880, 560); MinimumSize = new Size(650, 420); Font = SystemFonts.MessageBoxFont; StartPosition = FormStartPosition.CenterParent;
+            if (DesignMode || System.ComponentModel.LicenseManager.UsageMode == System.ComponentModel.LicenseUsageMode.Designtime) return;
             root.Text = SteamCatalog.DefaultDirectory();
-            search.TextChanged += (s, e) => Filter();
-            var select = EditorUi.Button("選択", (s, e) => { if (games.SelectedItem is SteamGame game) { SelectedGame = game; DialogResult = DialogResult.OK; } });
-            games.DoubleClick += (s, e) => select.PerformClick();
-            var cancel = EditorUi.Button("キャンセル", (s, e) => { DialogResult = DialogResult.Cancel; });
-            Controls.Add(games);
-            Controls.Add(EditorUi.Toolbar(EditorUi.Label("検索"), search, status));
-            Controls.Add(EditorUi.Toolbar(EditorUi.Label("Steamフォルダ"), root, EditorUi.Button("参照…", (s, e) =>
-            {
-                using (var dialog = new FolderBrowserDialog { SelectedPath = root.Text })
-                    if (dialog.ShowDialog(this) == DialogResult.OK) { root.Text = dialog.SelectedPath; Reload(); }
-            }), EditorUi.Button("再検索", (s, e) => Reload())));
-            var footer = EditorUi.Toolbar(select, cancel); footer.Dock = DockStyle.Bottom; Controls.Add(footer);
-            AcceptButton = select; CancelButton = cancel;
-            Shown += (s, e) => Reload();
+            Reload();
+        }
+        void Search_TextChanged(object sender, EventArgs e) => Filter();
+        void Games_DoubleClick(object sender, EventArgs e) => selectButton.PerformClick();
+        void SelectButton_Click(object sender, EventArgs e)
+        {
+            if (games.SelectedItem is SteamGame game) { SelectedGame = game; DialogResult = DialogResult.OK; }
+        }
+        void CancelButton_Click(object sender, EventArgs e) => DialogResult = DialogResult.Cancel;
+        void ReloadButton_Click(object sender, EventArgs e) => Reload();
+        void BrowseButton_Click(object sender, EventArgs e)
+        {
+            using (var dialog = new FolderBrowserDialog { SelectedPath = root.Text })
+                if (dialog.ShowDialog(this) == DialogResult.OK) { root.Text = dialog.SelectedPath; Reload(); }
         }
         async void Reload()
         {
