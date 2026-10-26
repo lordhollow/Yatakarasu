@@ -132,7 +132,9 @@ namespace Yata
             {
                 if (holder.Counter <= 0)
                 {
-                    if (holder.Component.Update())
+                    bool changed;
+                    using (PageFaultDiagnostics.Measure(holder.UpdateDiagnosticName)) changed = holder.Component.Update();
+                    if (changed)
                     {
                         var widget = holder.Component as IWidget;
                         if (widget != null)
@@ -140,7 +142,7 @@ namespace Yata
                             BacksurfaceGraphic.ResetTransform();
                             BacksurfaceGraphic.TranslateTransform(holder.Position.X, holder.Position.Y);
                             BacksurfaceGraphic.SetClip(new Rectangle(0, 0, widget.Width, widget.Height));
-                            widget.Draw(BacksurfaceGraphic);
+                            using (PageFaultDiagnostics.Measure(holder.DrawDiagnosticName)) widget.Draw(BacksurfaceGraphic);
                             ret = true;
                         }
                     }
@@ -166,15 +168,18 @@ namespace Yata
 
         public void Draw(Graphics g)
         {
-            g.Clear(Color.Transparent);
-            //g.ScaleTransform(0.78f, 0.78f);
-            g.DrawImage(Background, 0, 0);
-            g.DrawImage(BackSurface, 0, 0);
-            g.DrawImage(Overlay, 0, 0);
+            using (PageFaultDiagnostics.Measure("Window.Composition"))
+            {
+                g.Clear(Color.Transparent);
+                //g.ScaleTransform(0.78f, 0.78f);
+                g.DrawImage(Background, 0, 0);
+                g.DrawImage(BackSurface, 0, 0);
+                g.DrawImage(Overlay, 0, 0);
 #if DEBUG
-            g.DrawRectangle(Pens.Red, new Rectangle(0, 0, width-1, height-1));
+                g.DrawRectangle(Pens.Red, new Rectangle(0, 0, width-1, height-1));
 #endif
-            //g.ResetTransform();
+                //g.ResetTransform();
+            }
         }
 
         public void Remove(IUpdatable component)
@@ -205,6 +210,8 @@ namespace Yata
                 _Widgets.Add(new ComponentHolder
                 {
                     Component = component,
+                    UpdateDiagnosticName = component.GetType().Name + ".Update",
+                    DrawDiagnosticName = component.GetType().Name + ".Draw",
                     Position = position,
                     Counter = 0,
                 });
@@ -214,6 +221,7 @@ namespace Yata
         class ComponentHolder
         {
             public IUpdatable Component;
+            public string UpdateDiagnosticName, DrawDiagnosticName;
             public Point Position;
             public int Counter;
         }

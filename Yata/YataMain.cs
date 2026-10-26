@@ -195,6 +195,8 @@ namespace Yata
 
         private void tmUpdate_Tick(object sender, EventArgs e)
         {
+            try { PageFaultDiagnostics.Complete(); }
+            catch (Exception ex) { EditorUi.Error(this, ex); }
             if (!this.Focused)
             {
                 GlobalWindowUtil.BackupForground();
@@ -202,7 +204,7 @@ namespace Yata
 
             if (diagnostics.Do())   //container.Update
             {
-                CheckPosition();
+                using (PageFaultDiagnostics.Measure("Window.Position")) CheckPosition();
                 Invalidate();
             }
         }
@@ -266,6 +268,14 @@ namespace Yata
             menu.Items.Add("前のページ", null, (s, e) => launcher.ChangePage(-1));
             menu.Items.Add("次のページ", null, (s, e) => launcher.ChangePage(1));
             var page = menu.Items.Add(""); page.Enabled = false;
+            menu.Items.Add(new ToolStripSeparator());
+            var profile = menu.Items.Add("ページフォルトを30秒計測", null, (s, e) =>
+            {
+                try { PageFaultDiagnostics.Start(TimeSpan.FromSeconds(30), PageFaultDiagnostics.DefaultDirectory); }
+                catch (Exception ex) { EditorUi.Error(this, ex); }
+            });
+            profile.ToolTipText = "結果はローカルアプリデータの Yatakarasu\\diagnostics にCSVで保存します。";
+            menu.Opening += (s, e) => profile.Enabled = !PageFaultDiagnostics.IsRunning;
             menu.Opening += (s, e) => page.Text = $"ページ {launcher.PageNumber} / {launcher.PageCount}";
             ContextMenuStrip = menu;
             KeyPreview = true;

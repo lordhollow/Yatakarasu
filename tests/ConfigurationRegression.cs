@@ -50,6 +50,7 @@ static class ConfigurationRegression
             Run("Window drawing buffers retain full-size frames without shrinking", DrawingBufferCapacity);
             Run("Loaded images preserve composition and release source files", DrawingImages);
             Run("Launcher focus fades and clears for every image source", LauncherFocus);
+            Run("Page fault recording marks concurrency and waits for active scopes", PageFaultRecording);
             Console.WriteLine("All " + passed + " configuration checks passed.");
             foreach (var image in images) Console.WriteLine("PREVIEW: " + image);
             return 0;
@@ -397,6 +398,66 @@ static class ConfigurationRegression
             Check(launcher.PageNumber == 2 && launcher.Update(), "Next-page navigation did not redraw."); launcher.Draw(graphics);
             Check(!launcher.Update(), "Page navigation left a focus animation running.");
         }
+    }
+    static void PageFaultRecording()
+    {
+        Check(!PageFaultDiagnostics.IsRunning, "Diagnostics were enabled by default.");
+        using (PageFaultDiagnostics.Measure("Disabled")) { }
+        Check(PageFaultDiagnostics.Difference(uint.MaxValue - 3, 2) == 6, "DWORD counter wrap was lost.");
+        var directory = Path.Combine(root, "page-fault-recording");
+        PageFaultDiagnostics.Start(TimeSpan.FromMinutes(1), directory);
+        Check(PageFaultDiagnostics.Complete() == null, "Recording stopped before its deadline.");
+        bool duplicateRejected = false;
+        try { PageFaultDiagnostics.Start(TimeSpan.FromSeconds(30), directory); }
+        catch (InvalidOperationException) { duplicateRejected = true; }
+        Check(duplicateRejected, "A running recording was replaced.");
+        for (int i = 0; i < 4; i++) using (PageFaultDiagnostics.Measure("Stable")) { }
+        var container = new WidgetContainer(); container.Initialize(1280, 800);
+        var widget = new TestWidget(Color.Red); container.Add(widget);
+        try
+        {
+            container.Update();
+            using (var bitmap = new Bitmap(1280, 800, System.Drawing.Imaging.PixelFormat.Format32bppPArgb))
+            using (var graphics = Graphics.FromImage(bitmap)) container.Draw(graphics);
+        }
+        finally
+        {
+            container.Remove(widget);
+            foreach (var field in new[] { "BacksurfaceGraphic", "Background", "Overlay", "BackSurface" })
+                ((IDisposable)typeof(WidgetContainer).GetField(field, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(container)).Dispose();
+        }
+        using (var started = new System.Threading.ManualResetEventSlim())
+        using (var release = new System.Threading.ManualResetEventSlim())
+        {
+            var worker = System.Threading.Tasks.Task.Run(() =>
+            {
+                using (PageFaultDiagnostics.Measure("Worker")) { started.Set(); Check(release.Wait(5000), "Worker was not released."); }
+            });
+            try
+            {
+                Check(started.Wait(5000), "Worker did not start.");
+                using (PageFaultDiagnostics.Measure("UI")) { }
+            }
+            finally { release.Set(); worker.GetAwaiter().GetResult(); }
+        }
+        try { using (PageFaultDiagnostics.Measure("Failure")) throw new InvalidOperationException("Expected"); }
+        catch (InvalidOperationException) { }
+        var pending = PageFaultDiagnostics.Measure("Pending");
+        Check(PageFaultDiagnostics.Complete(true) == null, "An active scope was exported prematurely.");
+        using (PageFaultDiagnostics.Measure("AfterStop")) { }
+        pending.Dispose(); pending.Dispose();
+        var path = PageFaultDiagnostics.Complete(true);
+        Check(path != null && !PageFaultDiagnostics.IsRunning && PageFaultDiagnostics.Complete(true) == null, "Recording did not stop exactly once.");
+        var lines = File.ReadAllLines(path);
+        Func<string, string[]> row = name => lines.Single(x => x.StartsWith("scope,\"" + name + "\",", StringComparison.Ordinal)).Split(',');
+        Check(row("Stable")[2] == "4" && row("Stable")[6] == "2", "Warmup samples were not excluded from steady counts.");
+        Check(row("Worker")[3] == "1" && row("UI")[3] == "1", "Concurrent scopes were presented as disjoint attribution.");
+        Check(row("Pending")[2] == "1" && row("Failure")[2] == "1", "Pending or failed work was omitted.");
+        Check(row("TestWidget.Update")[2] == "1" && row("TestWidget.Draw")[2] == "1" && row("Window.Composition")[2] == "1", "Production update and drawing scopes were not connected.");
+        Check(!lines.Any(x => x.Contains("Disabled") || x.Contains("AfterStop")), "Inactive scopes were recorded.");
+        PageFaultDiagnostics.Start(TimeSpan.FromMilliseconds(1), directory);
+        System.Threading.Thread.Sleep(20);
+        Check(PageFaultDiagnostics.Complete() != null, "Expired recording did not complete automatically.");
     }
     static Bitmap RenderLayers(bool premultiplied, float brightness)
     {

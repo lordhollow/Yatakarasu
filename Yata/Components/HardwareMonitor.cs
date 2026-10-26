@@ -351,39 +351,45 @@ namespace Yata.Components
                 }
             }
 
-            var failedHardware = new HashSet<IHardware>(
-                UpdateTargetHardware.Where((hw, i) => !succeeded[i]));
-            foreach (ValueHistorySensor sensor in UpdateTargetSensor)
+            using (PageFaultDiagnostics.Measure("Hardware.SensorHistory"))
             {
-                var target = "Sensor " + sensor.Identifier;
-                try
+                var failedHardware = new HashSet<IHardware>(
+                    UpdateTargetHardware.Where((hw, i) => !succeeded[i]));
+                foreach (ValueHistorySensor sensor in UpdateTargetSensor)
                 {
-                    sensor.Update(failedHardware);
-                    HardwareUpdateLog.Success(target);
+                    var target = "Sensor " + sensor.Identifier;
+                    try
+                    {
+                        sensor.Update(failedHardware);
+                        HardwareUpdateLog.Success(target);
+                    }
+                    catch (Exception ex)
+                    {
+                        sensor.Value = null;
+                        HardwareUpdateLog.Failure(target, ex);
+                    }
                 }
-                catch (Exception ex)
-                {
-                    sensor.Value = null;
-                    HardwareUpdateLog.Failure(target, ex);
-                }
+                HardwareUpdateLog.Success("Update cycle");
+                Age++;
             }
-            HardwareUpdateLog.Success("Update cycle");
-            Age++;
         }
 
         internal static bool TryUpdateHardware(IHardware hardware)
         {
             var target = "Hardware " + hardware.Identifier;
-            try
+            using (PageFaultDiagnostics.Measure(target))
             {
-                hardware.Update();
-                HardwareUpdateLog.Success(target);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                HardwareUpdateLog.Failure(target, ex);
-                return false;
+                try
+                {
+                    hardware.Update();
+                    HardwareUpdateLog.Success(target);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    HardwareUpdateLog.Failure(target, ex);
+                    return false;
+                }
             }
         }
 

@@ -87,6 +87,8 @@ ARGB形式の全画面3層を毎回合成すると、GDI+側で多数のペー�
 実プロセスの採取は`tools/diagnostics/measure-process-page-faults.ps1`、HWにアクセスしない描画単独試験は`tools/diagnostics/run-graphics-page-fault-probe.ps1`で実施できる。
 画面転送バッファの比較には`run-graphics-page-fault-probe.ps1 -WindowBuffers`を指定する。
 実ウィジェット・設定済みのアイコン・枠の表示から消去までを調べる場合は`tools/diagnostics/run-widget-page-fault-probe.ps1`を使う。起動コマンドは無害な内部処理に差し替え、外部アプリは起動しない。
+待機時の単独試験は同スクリプトの`-IdleQueries`、実行中プロセスの発生周期の採取は`-ProcessId <PID>`を指定する。
+機器別の計測は右クリック →「ページフォルトを30秒計測」。通常表示で約30秒待つと、`%LOCALAPPDATA%\Yatakarasu\diagnostics`へCSVを保存する。計測時だけ有効で、HW監視の更新頻度は変えない。重複区間の扱いとCSVの読み方は上記の調査記録を参照。
 
 ## 実行方法
 karasu.exeを起動した状態で(3分以内に)karasu.exeを管理者権限で起動する。  

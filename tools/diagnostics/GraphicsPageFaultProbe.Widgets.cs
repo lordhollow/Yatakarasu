@@ -12,6 +12,66 @@ using Yata;
 
 static partial class GraphicsPageFaultProbe
 {
+    internal static int RunIdleQueries(string output)
+    {
+        try
+        {
+            results.Add("case,round,iterations,elapsed_ms,total_page_faults,faults_per_iteration,private_bytes_delta,working_set_delta,gc0,gc1,gc2");
+            var assembly = typeof(OwnerDrawWidget).Assembly;
+            using (var target = new Bitmap(1280, 800, PixelFormat.Format32bppPArgb))
+            using (var graphics = Graphics.FromImage(target))
+            using (var clock = (OwnerDrawWidget)Activator.CreateInstance(assembly.GetType("Yata.Components.Widget.DigitalClock")))
+            using (var meter = (OwnerDrawWidget)Activator.CreateInstance(assembly.GetType("Yata.Components.Widget.Tachometer"), 0f, 100f, new ProbeSensor()))
+            using (var audio = (IDisposable)Activator.CreateInstance(assembly.GetType("Yata.Components.AudioVolumeController")))
+            using (var window = new ProbeWindow())
+            {
+                var audioType = audio.GetType();
+                var volume = (Func<float>)Delegate.CreateDelegate(typeof(Func<float>), audio, audioType.GetProperty("Volume").GetGetMethod());
+                var capture = (Func<float>)Delegate.CreateDelegate(typeof(Func<float>), audio, audioType.GetProperty("CaptureVolume").GetGetMethod());
+                var mute = (Func<bool>)Delegate.CreateDelegate(typeof(Func<bool>), audio, audioType.GetProperty("Mute").GetGetMethod());
+                var captureMute = (Func<bool>)Delegate.CreateDelegate(typeof(Func<bool>), audio, audioType.GetProperty("CaptureMute").GetGetMethod());
+                var foreground = (Action)Delegate.CreateDelegate(typeof(Action), assembly.GetType("Yata.GlobalWindowUtil").GetMethod("BackupForground"));
+                meter.Update(); clock.Update(); window.Show(); Application.DoEvents();
+                for (int round = 1; round <= 3; round++)
+                {
+                    Measure("digital-clock-update-draw", round, 200, () => { clock.Update(); DrawWidget(clock, graphics); });
+                    Measure("six-tachometers-update-draw", round, 200, () => { for (int i = 0; i < 6; i++) { meter.Update(); DrawWidget(meter, graphics); } });
+                    Measure("audio-four-property-reads", round, 200, () => { volume(); capture(); mute(); captureMute(); });
+                    Measure("screen-query-and-unchanged-location", round, 200, () => { var bounds = Screen.AllScreens.Last().Bounds; window.Location = new Point(-20000 + bounds.Width % 2, -20000); });
+                    Measure("foreground-backup", round, 200, foreground);
+                }
+            }
+            File.WriteAllLines(output, results); Console.WriteLine("CSV: " + Path.GetFullPath(output)); return 0;
+        }
+        catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    static extern bool CloseHandle(IntPtr handle);
+    internal static int SampleProcess(string output, int pid)
+    {
+        var handle = OpenProcess(0x1000, false, pid); // PROCESS_QUERY_LIMITED_INFORMATION, no injection or VM writes.
+        if (handle == IntPtr.Zero) { Console.Error.WriteLine(new System.ComponentModel.Win32Exception()); return 1; }
+        try
+        {
+            var samples = new List<string>(2100);
+            samples.Add("elapsed_ms,page_faults,working_set,private_bytes");
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            do
+            {
+                MemoryCounters counters;
+                if (!GetProcessMemoryInfo(handle, out counters, (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(MemoryCounters))))
+                    throw new System.ComponentModel.Win32Exception();
+                samples.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:F3},{1},{2},{3}", timer.Elapsed.TotalMilliseconds, counters.PageFaultCount, counters.WorkingSet.ToUInt64(), counters.PrivateBytes.ToUInt64()));
+                System.Threading.Thread.Sleep(10);
+            } while (timer.Elapsed.TotalSeconds < 20);
+            File.WriteAllLines(output, samples); Console.WriteLine("CSV: " + Path.GetFullPath(output)); return 0;
+        }
+        catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+        finally { CloseHandle(handle); }
+    }
     internal static int RunWidgets(string output, string launcherFile)
     {
         try
@@ -231,5 +291,7 @@ static class WidgetProbeRunner
 {
     [STAThread]
     static int Main(string[] args) => args.Length > 1 && args[1] == "--os-queries"
-        ? GraphicsPageFaultProbe.RunOsQueries(args[0]) : GraphicsPageFaultProbe.RunWidgets(args[0], args.Length > 1 ? args[1] : null);
+        ? GraphicsPageFaultProbe.RunOsQueries(args[0]) : args.Length > 1 && args[1] == "--idle-queries"
+        ? GraphicsPageFaultProbe.RunIdleQueries(args[0]) : args.Length > 2 && args[1] == "--process-samples"
+        ? GraphicsPageFaultProbe.SampleProcess(args[0], int.Parse(args[2])) : GraphicsPageFaultProbe.RunWidgets(args[0], args.Length > 1 ? args[1] : null);
 }
