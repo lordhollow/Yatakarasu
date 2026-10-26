@@ -292,6 +292,7 @@ static class WidgetProbeRunner
     [STAThread]
     static int Main(string[] args) => args.Length > 1 && args[1] == "--os-queries"
         ? GraphicsPageFaultProbe.RunOsQueries(args[0]) : args.Length > 1 && args[1] == "--idle-queries"
-        ? GraphicsPageFaultProbe.RunIdleQueries(args[0]) : args.Length > 2 && args[1] == "--process-samples"
+        ? GraphicsPageFaultProbe.RunIdleQueries(args[0]) : args.Length > 1 && args[1] == "--nvidia-queries"
+        ? GraphicsPageFaultProbe.RunNvidiaQueries(args[0]) : args.Length > 2 && args[1] == "--process-samples"
         ? GraphicsPageFaultProbe.SampleProcess(args[0], int.Parse(args[2])) : GraphicsPageFaultProbe.RunWidgets(args[0], args.Length > 1 ? args[1] : null);
 }

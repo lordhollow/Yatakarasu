@@ -89,6 +89,8 @@ ARGB形式の全画面3層を毎回合成すると、GDI+側で多数のペー�
 実ウィジェット・設定済みのアイコン・枠の表示から消去までを調べる場合は`tools/diagnostics/run-widget-page-fault-probe.ps1`を使う。起動コマンドは無害な内部処理に差し替え、外部アプリは起動しない。
 待機時の単独試験は同スクリプトの`-IdleQueries`、実行中プロセスの発生周期の採取は`-ProcessId <PID>`を指定する。
 機器別の計測は右クリック →「ページフォルトを30秒計測」。通常表示で約30秒待つと、`%LOCALAPPDATA%\Yatakarasu\diagnostics`へCSVを保存する。計測時だけ有効で、HW監視の更新頻度は変えない。重複区間の扱いとCSVの読み方は上記の調査記録を参照。
+NVIDIAでは未使用の電力比率・電圧取得を省く。選択した項目や合計・平均に必要な場合は取得を戻す。消費電力Wは別経路で取得する。この互換処理はLibreHardwareMonitor 0.9.6.0の内部実装に依存するため同版に限定し、ライブラリ更新時に再検証する。
+GPUの読み取りAPI単位の切り分けは`run-widget-page-fault-probe.ps1 -NvidiaQueries`で実施できる。
 
 ## 実行方法
 karasu.exeを起動した状態で(3分以内に)karasu.exeを管理者権限で起動する。  

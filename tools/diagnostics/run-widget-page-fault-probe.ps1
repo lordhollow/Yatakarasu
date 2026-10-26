@@ -1,4 +1,4 @@
-param([string]$AssetDirectory, [string]$LauncherFile, [switch]$OsQueries, [switch]$IdleQueries, [ValidateRange(0, 2147483647)][int]$ProcessId = 0, [ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$Tag = 'current')
+param([string]$AssetDirectory, [string]$LauncherFile, [switch]$OsQueries, [switch]$IdleQueries, [switch]$NvidiaQueries, [ValidateRange(0, 2147483647)][int]$ProcessId = 0, [ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$Tag = 'current')
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 if (!$AssetDirectory) { $AssetDirectory = Join-Path $repoRoot 'Yata/bin/x64/Release/files' }
@@ -22,10 +22,11 @@ foreach ($file in @('clockback.png', 'SystemApp.png')) { Copy-Item -LiteralPath 
 $exe = Join-Path $output 'WidgetPageFaultProbe.exe'
 & $compiler /nologo /target:exe /platform:x64 /optimize+ /main:WidgetProbeRunner "/out:$exe" `
     /reference:System.Drawing.dll /reference:System.Windows.Forms.dll "/reference:$(Join-Path $output 'Yata.exe')" "/reference:$(Join-Path $output 'LibreHardwareMonitorLib.dll')" `
-    (Join-Path $PSScriptRoot 'GraphicsPageFaultProbe.cs') (Join-Path $PSScriptRoot 'GraphicsPageFaultProbe.Windows.cs') (Join-Path $PSScriptRoot 'GraphicsPageFaultProbe.Widgets.cs')
+    (Join-Path $PSScriptRoot 'GraphicsPageFaultProbe.cs') (Join-Path $PSScriptRoot 'GraphicsPageFaultProbe.Windows.cs') (Join-Path $PSScriptRoot 'GraphicsPageFaultProbe.Widgets.cs') (Join-Path $PSScriptRoot 'GraphicsPageFaultProbe.Nvidia.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Probe compilation failed.' }
 if ($ProcessId) { & $exe (Join-Path $output "process-samples-$Tag.csv") --process-samples $ProcessId }
 elseif ($OsQueries) { & $exe (Join-Path $output "os-query-page-faults-$Tag.csv") --os-queries }
 elseif ($IdleQueries) { & $exe (Join-Path $output "idle-query-page-faults-$Tag.csv") --idle-queries }
+elseif ($NvidiaQueries) { & $exe (Join-Path $output "nvidia-query-page-faults-$Tag.csv") --nvidia-queries }
 else { & $exe (Join-Path $output "widget-page-faults-$Tag.csv") $LauncherFile }
 if ($LASTEXITCODE -ne 0) { throw 'Probe failed.' }
