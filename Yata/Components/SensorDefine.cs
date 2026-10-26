@@ -20,7 +20,7 @@ namespace Yata.Components
 
         }
 
-        public void ReadFromFile(string filename)
+        public void ReadFromFile(string filename, bool strict = false)
         {
             PlotDefines.Clear();
             MeterDefines.Clear();
@@ -29,9 +29,11 @@ namespace Yata.Components
             var regPlotItem = new Regex(@"^\t(?<name>.+?)\t(?<id>[^\t]+)\t(?<r>\d+),(?<g>\d+),(?<b>\d+)(,(?<a>\d+))?");
             var regMeter = new Regex(@"^Meter\t(?<name>.+?)\t(?<unit>.+?)\t(?<min>.+?)\t(?<max>.+?)\t(?<id>[^\t]+)");
 
+            int lineNumber = 0;
             foreach (var line in File.ReadAllLines(filename))
             {
-                if (line.StartsWith("#")) continue;
+                lineNumber++;
+                if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#")) continue;
                 try
                 {
                     var m = regPlot.Match(line);
@@ -52,10 +54,11 @@ namespace Yata.Components
                         MeterDefines.Add(new MeterDefine(m));
                         continue;
                     }
+                    if (strict) throw new FormatException("Plot、Meter、またはグラフ項目の形式が不正です。");
                 }
-                catch
+                catch (Exception ex)
                 {
-                    //Skip Line
+                    if (strict) throw new FormatException($"{lineNumber}行目: {ex.Message}", ex);
                 }
             }
         }
@@ -77,10 +80,15 @@ namespace Yata.Components
             foreach (var plot in PlotDefines)
             {
                 ValidateRange(plot.Min, plot.Max);
-                if (float.IsNaN(plot.LowLevelThreshold) || float.IsInfinity(plot.LowLevelThreshold) || float.IsNaN(plot.HighLevelThreshold) || float.IsInfinity(plot.HighLevelThreshold)) throw new FormatException("境界値には有限の数値を指定してください。");
-                text.AppendLine(string.Join("\t", "Plot", Field(plot.Name), Field(plot.Unit), Number(plot.Min), Number(plot.Max), Number(plot.LowLevelThreshold), Number(plot.HighLevelThreshold)));
+                if (plot.Items.Count > 12) throw new FormatException("現在のレイアウトでは1グラフ12項目まで設定できます。");
+                if (string.IsNullOrWhiteSpace(plot.Name)) throw new FormatException("グラフのタイトルを入力してください。");
+                if (float.IsNaN(plot.LowLevelThreshold) || float.IsInfinity(plot.LowLevelThreshold) || float.IsNaN(plot.HighLevelThreshold) || float.IsInfinity(plot.HighLevelThreshold) || plot.LowLevelThreshold > plot.HighLevelThreshold) throw new FormatException("境界値には下境界≦上境界となる有限の数値を指定してください。");
+                text.AppendLine(string.Join("\t", "Plot", Field(plot.Name), Field(string.IsNullOrEmpty(plot.Unit) ? " " : plot.Unit), Number(plot.Min), Number(plot.Max), Number(plot.LowLevelThreshold), Number(plot.HighLevelThreshold)));
                 foreach (var item in plot.Items)
+                {
+                    if (string.IsNullOrWhiteSpace(item.Name) || string.IsNullOrWhiteSpace(item.Id)) throw new FormatException("グラフ項目の表示名とセンサーIDを入力してください。");
                     text.AppendLine(string.Join("\t", "", Field(item.Name), Field(item.Id), $"{item.Color.R},{item.Color.G},{item.Color.B},{item.Color.A}"));
+                }
             }
             foreach (var meter in MeterDefines)
             {
@@ -113,7 +121,7 @@ namespace Yata.Components
 
     class PlotDefine
     {
-        public PlotDefine() { Min = 0; Max = 100; Unit = "%"; }
+        public PlotDefine() { Min = 0; Max = 100; Unit = "%"; LowLevelThreshold = 0; HighLevelThreshold = 100; }
         public PlotDefine(Match m)
         {
             Name = m.Groups["name"].Value;

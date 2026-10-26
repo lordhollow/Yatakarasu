@@ -101,6 +101,12 @@ namespace Yata.Components.Widget
         }
 
         public ConstructionParameter Parameter { get; set; }
+        public override void Dispose()
+        {
+            capFont.Dispose(); blankBrush.Dispose(); center.Dispose();
+            foreach (var app in applications.Values)
+                if (app.Image != null && !ReferenceEquals(app.Image, CommonResource.InternalApplicationIconsImage)) app.Image.Dispose();
+        }
 
         /// <summary>
         /// クリックしたアイコンの強調期間
@@ -317,6 +323,21 @@ namespace Yata.Components.Widget
                     }
                     catch (Exception ex) when (ex is IOException || ex is ArgumentException || ex is UnauthorizedAccessException)
                     { System.Diagnostics.Trace.TraceWarning(ex.Message); }
+                }
+                if (app.Image == null)
+                {
+                    app.Image = System.Drawing.SystemIcons.Application.ToBitmap();
+                    if (entry.Command == "internal::LauncherNextPage" || entry.Command == "internal::LauncherPreviousPage")
+                    {
+                        app.Image.Dispose();
+                        app.Image = new Bitmap(48, 48);
+                        using (var graphics = Graphics.FromImage(app.Image))
+                        using (var font = new Font("Segoe UI", 26, FontStyle.Bold))
+                        {
+                            graphics.Clear(Color.FromArgb(35, 65, 100));
+                            graphics.DrawString(entry.Command.EndsWith("NextPage") ? ">" : "<", font, Brushes.White, 5, 0);
+                        }
+                    }
                 }
                 loaded.Add(posToApplicationIndex(entry.Row, entry.Column), app);
             }

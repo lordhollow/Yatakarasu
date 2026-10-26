@@ -12,6 +12,8 @@ using Yata.Components.Widget;
 using Yata.Components.Application;
 using System.Threading;
 using System.Runtime.InteropServices;
+using Yata.Components.Configuration;
+using Yata.Settings;
 
 namespace Yata
 {
@@ -36,6 +38,13 @@ namespace Yata
         /// パラメータ
         /// </summary>
         ScreenParameter screenParameter;
+        HardwareMonitor monitor;
+        Karasu karasu;
+        CommandLauncher launcher;
+        SuspendedChecker suspendChecker;
+        ConfigurationPaths configurationPaths;
+        readonly List<IUpdatable> sensorWidgets = new List<IUpdatable>();
+        bool settingsOpen;
 
         public YataMain()
         {
@@ -50,17 +59,18 @@ namespace Yata
             container = new WidgetContainer();
             container.Initialize(screenParameter.ScreenWidth, screenParameter.ScreenHeight);
             var bp = 24;    //bp=base pitch, 基本間隔(スナップするグリッドの幅)
-            var rm = 16;    //右マージン。1024は24で割ると42あまり16なのでその16。右寄せするときこれを足す。
 
             //非表示コンポーネント
             var sensorDefine = new SensorDefine();
-            sensorDefine.ReadFromFile(CommonResource.YataFile("sensor.txt"));
-            var monitor = hwMonitorSetup(sensorDefine);
+            configurationPaths = ConfigurationPaths.Load();
+            sensorDefine.ReadFromFile(configurationPaths.SensorFile);
+            sensorDefine.EnsureFixedLayout();
+            monitor = hwMonitorSetup(sensorDefine);
             container.Add(monitor);
-            var karasu = new Karasu();
+            karasu = new Karasu();
             container.Add(karasu);
             this.FormClosed += (s, a) => karasu.SendImmidiate("EXIT");
-            var suspendChecker = new SuspendedChecker() { Expire = sensorTimeWindow };
+            suspendChecker = new SuspendedChecker() { Expire = sensorTimeWindow };
             container.Add(suspendChecker);
 
             //ウィジェット
@@ -84,9 +94,14 @@ namespace Yata
             container.Add(new AudioMuteButton(volumeCtrl, true), new Point(4 * bp, volumeCtrlY + 6 * bp + 8));
 
             //ランチャ
-            var launcher = new CommandLauncher(CommandLauncher.ConstructionParameter.WXGA);
+            launcher = new CommandLauncher(CommandLauncher.ConstructionParameter.WXGA);
             launcher.Karasu = karasu;
-            launcher.LoadFromFile(CommonResource.YataFile("karasu.exec.txt"), container);
+            try { launcher.LoadFromFile(configurationPaths.LauncherFile, container); }
+            catch (Exception ex)
+            {
+                Shown += (sender, args) => MessageBox.Show(this, "ランチャー定義を読み込めません。右クリック → ランチャー編集で修正または別ファイルを選択してください。\r\n" + ex.Message, "ランチャー定義", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            launcher.SystemActionRequested += name => BeginInvoke((Action)(() => { if (name == "EditSensors") OpenSensorSettings(); else OpenLauncherSettings(); }));
             //RegistorInternalApplications(launcher);
             container.Add(launcher, new Point(0, screenParameter.ScreenHeight - launcher.Height));
 
@@ -98,6 +113,7 @@ namespace Yata
 #endif
 
             ClientSize = new Size((int)(container.Width * screenParameter.ScreenScale), (int)(container.Height * screenParameter.ScreenScale));
+            SetupSettingsMenu();
 
             tmUpdate.Enabled = true;
         }
@@ -135,6 +151,8 @@ namespace Yata
 
                 container.Add(current, new Point(8 * bp, plotterBaseY));
                 container.Add(plotter, new Point(14 * bp, plotterBaseY + 4));
+                sensorWidgets.Add(current);
+                sensorWidgets.Add(plotter);
                 plotterBaseY += plotter.Height;
                 if (--plotMax <= 0) break;
             }
@@ -142,20 +160,20 @@ namespace Yata
 
         private void SetupMeterWidgets(int bp, SensorDefine sensorDefine, HardwareMonitor monitor)
         {
-            //5個までのメーター
-            int meterMax = screenParameter.ScreenHeight >= 800 ? 7 : 5;
+            //位置は既存のまま、タコメーターは6個に固定する。
+            int meterIndex = 0;
             var meterY = new int[] { 2 * bp + 12, 5 * bp + 12, 8 * bp + 12, 11 * bp + 12, 15 * bp, 18 * bp, 21 * bp };
             {
-                foreach (var meterDef in sensorDefine.MeterDefines)
+                foreach (var meterDef in sensorDefine.MeterDefines.Take(6))
                 {
                     var id = meterDef.Id;
-                    var tacho = new Tachometer((int)meterDef.Min, (int)meterDef.Max, monitor[id])
+                    var tacho = new Tachometer(meterDef.Min, meterDef.Max, monitor[id])
                     {
                         Caption = meterDef.Name,
                         Unit = meterDef.Unit,
                     };
-                    container.Add(tacho, new Point(screenParameter.ScreenWidth - 72 - 16, meterY[7 - meterMax]));
-                    if (--meterMax <= 0) break;
+                    container.Add(tacho, new Point(screenParameter.ScreenWidth - 72 - 16, meterY[meterIndex++]));
+                    sensorWidgets.Add(tacho);
                 }
             }
         }
@@ -192,9 +210,11 @@ namespace Yata
         }
 
         Point ClickPos;
+        MouseButtons clickButton;
 
         private void YataMain_Click(object sender, EventArgs e)
         {
+            if (clickButton != MouseButtons.Left) return;
             if ((ClickPos.X < container.Width) && (ClickPos.Y < container.Height))
             {
                 container.Click(ClickPos.X, ClickPos.Y);
@@ -203,6 +223,7 @@ namespace Yata
 
         private void YataMain_MouseDown(object sender, MouseEventArgs e)
         {
+            clickButton = e.Button;
             ClickPos.X = (int)(e.Location.X / screenParameter.ScreenScale);
             ClickPos.Y = (int)(e.Location.Y / screenParameter.ScreenScale);
 
@@ -228,6 +249,69 @@ namespace Yata
         {
             var sc = Screen.AllScreens.Last();
             Location = new Point(sc.Bounds.Right - Width, sc.Bounds.Top);
+        }
+
+        void SetupSettingsMenu()
+        {
+            var menu = new ContextMenuStrip();
+            menu.Items.Add("センサー選択・設定… (F2)", null, (s, e) => OpenSensorSettings());
+            menu.Items.Add("ランチャー編集… (F3)", null, (s, e) => OpenLauncherSettings());
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("前のページ", null, (s, e) => launcher.ChangePage(-1));
+            menu.Items.Add("次のページ", null, (s, e) => launcher.ChangePage(1));
+            var page = menu.Items.Add(""); page.Enabled = false;
+            menu.Opening += (s, e) => page.Text = $"ページ {launcher.PageNumber} / {launcher.PageCount}";
+            ContextMenuStrip = menu;
+            KeyPreview = true;
+            KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.F2) { e.Handled = true; OpenSensorSettings(); }
+                else if (e.KeyCode == Keys.F3) { e.Handled = true; OpenLauncherSettings(); }
+            };
+        }
+
+        async void OpenSensorSettings()
+        {
+            if (settingsOpen) return;
+            settingsOpen = true;
+            try
+            {
+                using (var dialog = new SensorSettingsForm(configurationPaths.SensorFile, SensorChoice.FromSensors(monitor.AllSensors)))
+                {
+                    if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                    tmUpdate.Enabled = false;
+                    UseWaitCursor = true;
+                    await monitor.ReconfigureAsync(sensorTimeWindow, dialog.ResultDefinition.SensorUsage().Where(x => !string.IsNullOrWhiteSpace(x) && x != "-").Distinct());
+                    foreach (var widget in sensorWidgets) container.Remove(widget);
+                    sensorWidgets.Clear();
+                    SetupPlotWidgets(24, dialog.ResultDefinition, monitor, suspendChecker);
+                    SetupMeterWidgets(24, dialog.ResultDefinition, monitor);
+                    configurationPaths.SensorFile = dialog.SelectedPath;
+                    configurationPaths.Save();
+                    container.Update(); Invalidate();
+                }
+            }
+            catch (Exception ex) { EditorUi.Error(this, ex); }
+            finally { UseWaitCursor = false; tmUpdate.Enabled = true; settingsOpen = false; }
+        }
+
+        void OpenLauncherSettings()
+        {
+            if (settingsOpen) return;
+            settingsOpen = true;
+            try
+            {
+                using (var dialog = new LauncherSettingsForm(configurationPaths.LauncherFile))
+                {
+                    if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                    launcher.LoadFromFile(dialog.SelectedPath, container);
+                    configurationPaths.LauncherFile = dialog.SelectedPath;
+                    configurationPaths.Save();
+                    container.Update(); Invalidate();
+                }
+            }
+            catch (Exception ex) { EditorUi.Error(this, ex); }
+            finally { settingsOpen = false; }
         }
 
     }

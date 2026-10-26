@@ -50,6 +50,7 @@ namespace Yata.Components.Widget
         }
 
         public string Unit { get; set; }
+        public override void Dispose() => font.Dispose();
 
         public override void Draw(Graphics graphics)
         {

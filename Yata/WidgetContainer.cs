@@ -175,6 +175,22 @@ namespace Yata
             //g.ResetTransform();
         }
 
+        public void Remove(IUpdatable component)
+        {
+            var holder = _Widgets.Find(x => ReferenceEquals(x.Component, component));
+            if (holder == null) return;
+            _Widgets.Remove(holder);
+            if (component is IWidget widget)
+            {
+                using (var graphics = Graphics.FromImage(BackSurface))
+                {
+                    graphics.SetClip(new Rectangle(holder.Position, new Size(widget.Width, widget.Height)));
+                    graphics.Clear(Color.Transparent);
+                }
+            }
+            (component as IDisposable)?.Dispose();
+        }
+
         public void Add(IUpdatable component)
         {
             Add(component, Point.Empty);

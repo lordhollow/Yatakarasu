@@ -251,6 +251,11 @@ namespace Karasu
 
         private static void Open(string cmd, string param)
         {
+            Process.Start(CreateStartInfo(cmd, param));
+        }
+
+        private static ProcessStartInfo CreateStartInfo(string cmd, string param)
+        {
             var info = new ProcessStartInfo(cmd, param);
             if (File.Exists(cmd))
             {
@@ -258,22 +263,28 @@ namespace Karasu
                 //(ファイルじゃないのはsteam://とかそういうのを想定）
                 info.WorkingDirectory = Path.GetDirectoryName(cmd);
             }
-            Process.Start(info);
+            return info;
         }
 
         private static void ExecutePosition(string key, int row, int column, string definitionPath)
         {
+            var info = ResolvePosition(key, row, column, definitionPath);
+            if (info != null) Process.Start(info);
+        }
+
+        private static ProcessStartInfo ResolvePosition(string key, int row, int column, string definitionPath)
+        {
             var lines = File.ReadAllLines(definitionPath);
-            if (lines.Length == 0 || lines[0] != key) return;
+            if (lines.Length == 0 || lines[0] != key) return null;
             foreach (var line in lines.Skip(1))
             {
                 var parts = line.Split('\t');
                 int candidateRow, candidateColumn;
                 if (parts.Length < 4 || !int.TryParse(parts[0], out candidateRow) || !int.TryParse(parts[1], out candidateColumn)) continue;
                 if (candidateRow != row || candidateColumn != column || parts[3].StartsWith("internal::")) continue;
-                Open(parts[3], parts.Length > 5 ? parts[5] : "");
-                return;
+                return CreateStartInfo(parts[3], parts.Length > 5 ? parts[5] : "");
             }
+            return null;
         }
 
         private static string YataFile(string name)

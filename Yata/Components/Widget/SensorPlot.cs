@@ -94,6 +94,7 @@ namespace Yata.Components.Widget
         public float HighLevelThreshold { get; set; } = float.MaxValue;
 
         public SuspendedChecker SuspendChecker { get; set; }
+        public override void Dispose() => font.Dispose();
 
         public override bool Update()
         {

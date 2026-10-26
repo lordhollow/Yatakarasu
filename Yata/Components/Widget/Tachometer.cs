@@ -22,7 +22,7 @@ namespace Yata.Components.Widget
         Font font;
         ISensor target;
 
-        public Tachometer(int min, int max, ISensor sensor)
+        public Tachometer(float min, float max, ISensor sensor)
             : base(WidgetScaleMode.Fixed, 72, 72)
         {
             this.min = min;
@@ -37,6 +37,7 @@ namespace Yata.Components.Widget
         /// 表示単位
         /// </summary>
         public string Unit { get; set; }
+        public override void Dispose() => font.Dispose();
 
         public override bool Update()
         {

@@ -75,7 +75,7 @@ namespace Yata.Components.Application
                         //Pause/exitつきでバッチファイル生成→実行
                         CreateBatch(msg, false, true);
                         System.Diagnostics.Process.Start("cmd.exe", "/C " + Widget.CommonResource.YataFile(batchFile));
-                        break;
+                        return;
                     case CommandExecutionType.KarasuCommandLineKeepAlive:
                         //Pause/exitつきでバッチファイル生成
                         CreateBatch(msg, false, true);

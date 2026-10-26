@@ -78,6 +78,16 @@
     <PackageReference Include="LibreHardwareMonitorLib" Version="[0.9.6]" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Components\Configuration\IconLibrary.cs" />
+    <Compile Include="Components\Configuration\SteamCatalog.cs" />
+    <Compile Include="Components\Configuration\SystemApplicationCatalog.cs" />
+    <Compile Include="Settings\EditorUi.cs" />
+    <Compile Include="Settings\SensorPickerForm.cs" />
+    <Compile Include="Settings\SensorSettingsForm.cs" />
+    <Compile Include="Settings\IconPickerForm.cs" />
+    <Compile Include="Settings\SteamPickerForm.cs" />
+    <Compile Include="Settings\LauncherEntryForm.cs" />
+    <Compile Include="Settings\LauncherSettingsForm.cs" />
     <Compile Include="Components\Configuration\ConfigurationFile.cs" />
     <Compile Include="Components\Configuration\LauncherDefinition.cs" />
     <Compile Include="Components\Application\MonitorPowerOff.cs" />

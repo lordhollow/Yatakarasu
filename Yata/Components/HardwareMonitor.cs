@@ -128,7 +128,15 @@ namespace Yata.Components
                     var s = int.Parse(m.Groups[2].Value);
                     var e = int.Parse(m.Groups[3].Value);
                     var l = new List<ISensor>();
-                    for (var i = s; i <= e; i++)
+                    var prefix = b + "/";
+                    var indices = new SortedSet<int>();
+                    foreach (var candidate in AllSensors)
+                    {
+                        var code = candidate.Identifier.ToString();
+                        if (code.StartsWith(prefix, StringComparison.Ordinal) && int.TryParse(code.Substring(prefix.Length), out var index) && index >= s && index <= e)
+                            indices.Add(index);
+                    }
+                    foreach (var i in indices)
                     {
                         //var sens = AllSensors?.Find(x => x.Identifier.ToString() == $"{b}/{i}");
                         var sens = Select($"{b}/{i}", name);
@@ -177,6 +185,14 @@ namespace Yata.Components
             }
             UpdateTargetHardware = updateList;
             UpdateTargetSensor = sensList;
+        }
+
+        public async Task ReconfigureAsync(TimeSpan timeWindow, IEnumerable<string> sensorUsage)
+        {
+            while (Interlocked.CompareExchange(ref updateInProgress, 1, 0) != 0)
+                await Task.Delay(25);
+            try { Startup(timeWindow, sensorUsage); }
+            finally { Interlocked.Exchange(ref updateInProgress, 0); }
         }
 
         /// <summary>
@@ -388,7 +404,7 @@ namespace Yata.Components
             public string Name { get; set; } = "Error.";
             public IReadOnlyList<IParameter> Parameters => null;
             public SensorType SensorType => SensorType.Data;
-            public float? Value => 0;
+            public float? Value => null;
             public IEnumerable<SensorValue> Values => new SensorValue[0];
             public TimeSpan ValuesTimeWindow { get; set; }
             public void Accept(IVisitor visitor) { }

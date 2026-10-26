@@ -8,7 +8,7 @@ using System.Drawing;
 
 namespace Yata
 {
-    public class OwnerDrawWidget : IUpdatable, IWidget
+    public class OwnerDrawWidget : IUpdatable, IWidget, IDisposable
     {
         public OwnerDrawWidget(WidgetScaleMode scaleMode, int initialWidth, int initialHeight)
         {
@@ -128,6 +128,7 @@ namespace Yata
         }
 
         public virtual void Click(int x, int y) { }
+        public virtual void Dispose() { }
 
     }
 }
