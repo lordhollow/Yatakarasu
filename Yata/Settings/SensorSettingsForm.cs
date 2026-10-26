@@ -25,7 +25,7 @@ namespace Yata.Settings
         void SelectMeterButton_Click(object sender, EventArgs e) => SelectSensor(meters);
         void ClearMeterButton_Click(object sender, EventArgs e)
         {
-            if (meters.CurrentRow != null) { meters.CurrentRow.Cells["Id"].Value = "-"; Dirty = true; }
+            if (meters.CurrentRow != null) { DataCell(meters.CurrentRow, "Id").Value = "-"; Dirty = true; }
         }
         void Plot1_SelectRequested() => SelectSensor(plot1.Series);
         void Plot2_SelectRequested() => SelectSensor(plot2.Series);
@@ -60,13 +60,15 @@ namespace Yata.Settings
             using (var picker = new SensorPickerForm(sensors))
                 if (picker.ShowDialog(this) == DialogResult.OK)
                 {
-                    grid.CurrentRow.Cells["Id"].Value = picker.SelectedSensor.Id;
-                    if (string.IsNullOrWhiteSpace(Cell(grid.CurrentRow, "Name")) || Cell(grid.CurrentRow, "Name") == "未設定" || Cell(grid.CurrentRow, "Name") == "項目") grid.CurrentRow.Cells["Name"].Value = picker.SelectedSensor.Name;
-                    if (grid.Columns.Contains("Unit")) grid.CurrentRow.Cells["Unit"].Value = picker.SelectedSensor.Unit;
+                    DataCell(grid.CurrentRow, "Id").Value = picker.SelectedSensor.Id;
+                    if (string.IsNullOrWhiteSpace(Cell(grid.CurrentRow, "Name")) || Cell(grid.CurrentRow, "Name") == "未設定" || Cell(grid.CurrentRow, "Name") == "項目") DataCell(grid.CurrentRow, "Name").Value = picker.SelectedSensor.Name;
+                    if (grid.Columns.Cast<DataGridViewColumn>().Any(column => column.DataPropertyName == "Unit")) DataCell(grid.CurrentRow, "Unit").Value = picker.SelectedSensor.Unit;
                     Dirty = true;
                 }
         }
-        internal static string Cell(DataGridViewRow row, string column) => Convert.ToString(row.Cells[column].Value) ?? "";
+        internal static DataGridViewCell DataCell(DataGridViewRow row, string propertyName)
+            => row.Cells[row.DataGridView.Columns.Cast<DataGridViewColumn>().Single(column => column.DataPropertyName == propertyName).Index];
+        internal static string Cell(DataGridViewRow row, string column) => Convert.ToString(DataCell(row, column).Value) ?? "";
         internal static string Number(float value) => value.ToString("R", CultureInfo.InvariantCulture);
         internal static float Parse(string value)
         {

@@ -1,4 +1,4 @@
-namespace Yata.Settings
+﻿namespace Yata.Settings
 {
     partial class LauncherSettingsForm
     {
@@ -16,7 +16,7 @@ namespace Yata.Settings
         #region Windows Form Designer generated code
         private void InitializeComponent()
         {
-            this.components = new System.ComponentModel.Container();
+            System.Windows.Forms.DataGridViewCellStyle dataGridViewCellStyle1 = new System.Windows.Forms.DataGridViewCellStyle();
             this.grid = new System.Windows.Forms.DataGridView();
             this.gridPageColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.gridPageRowColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
@@ -32,113 +32,166 @@ namespace Yata.Settings
             this.commandsPanel = new System.Windows.Forms.FlowLayoutPanel();
             this.status = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.grid)).BeginInit();
+            this.commandsPanel.SuspendLayout();
             this.SuspendLayout();
-            this.grid.Name = "grid";
-            this.grid.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.grid.AutoGenerateColumns = false;
+            //
+            // grid
+            //
             this.grid.AllowUserToAddRows = false;
             this.grid.AllowUserToDeleteRows = false;
-            this.grid.ReadOnly = true;
-            this.grid.RowHeadersVisible = false;
-            this.grid.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
-            this.grid.MultiSelect = false;
-            this.grid.BackgroundColor = System.Drawing.Color.White;
-            this.grid.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            dataGridViewCellStyle1.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(245)))), ((int)(((byte)(248)))), ((int)(((byte)(252)))));
+            this.grid.AlternatingRowsDefaultCellStyle = dataGridViewCellStyle1;
             this.grid.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.Fill;
-            this.grid.RowTemplate.Height = 27;
-            System.Windows.Forms.DataGridViewCellStyle gridAlternatingStyle = new System.Windows.Forms.DataGridViewCellStyle();
-            gridAlternatingStyle.BackColor = System.Drawing.Color.FromArgb(245, 248, 252);
-            this.grid.AlternatingRowsDefaultCellStyle = gridAlternatingStyle;
-            this.gridPageColumn.Name = "Page";
+            this.grid.BackgroundColor = System.Drawing.Color.White;
+            this.grid.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.grid.Location = new System.Drawing.Point(8, 54);
+            this.grid.MultiSelect = false;
+            this.grid.Name = "grid";
+            this.grid.AutoGenerateColumns = false;
+            this.gridPageColumn.Name = "gridPageColumn";
             this.gridPageColumn.DataPropertyName = "Page";
             this.gridPageColumn.HeaderText = "ページ";
             this.gridPageColumn.FillWeight = 35F;
             this.gridPageColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
-            this.gridPageRowColumn.Name = "PageRow";
+            this.gridPageRowColumn.Name = "gridPageRowColumn";
             this.gridPageRowColumn.DataPropertyName = "PageRow";
             this.gridPageRowColumn.HeaderText = "行 (0/1)";
             this.gridPageRowColumn.FillWeight = 35F;
             this.gridPageRowColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
-            this.gridColumnColumn.Name = "Column";
+            this.gridColumnColumn.Name = "gridColumnColumn";
             this.gridColumnColumn.DataPropertyName = "Column";
             this.gridColumnColumn.HeaderText = "列";
             this.gridColumnColumn.FillWeight = 30F;
             this.gridColumnColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
-            this.gridCaptionColumn.Name = "Caption";
+            this.gridCaptionColumn.Name = "gridCaptionColumn";
             this.gridCaptionColumn.DataPropertyName = "Caption";
             this.gridCaptionColumn.HeaderText = "表示名";
             this.gridCaptionColumn.FillWeight = 95F;
             this.gridCaptionColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
-            this.gridCommandColumn.Name = "Command";
+            this.gridCommandColumn.Name = "gridCommandColumn";
             this.gridCommandColumn.DataPropertyName = "Command";
             this.gridCommandColumn.HeaderText = "コマンド";
             this.gridCommandColumn.FillWeight = 180F;
             this.gridCommandColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
-            this.gridOptionColumn.Name = "Option";
+            this.gridOptionColumn.Name = "gridOptionColumn";
             this.gridOptionColumn.DataPropertyName = "Option";
             this.gridOptionColumn.HeaderText = "起動オプション";
             this.gridOptionColumn.FillWeight = 130F;
             this.gridOptionColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
             this.grid.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[] { this.gridPageColumn, this.gridPageRowColumn, this.gridColumnColumn, this.gridCaptionColumn, this.gridCommandColumn, this.gridOptionColumn });
+            this.grid.ReadOnly = true;
+            this.grid.RowHeadersVisible = false;
+            this.grid.RowTemplate.Height = 27;
+            this.grid.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
+            this.grid.Size = new System.Drawing.Size(1042, 544);
+            this.grid.TabIndex = 0;
             this.grid.DoubleClick += new System.EventHandler(this.Grid_DoubleClick);
-            this.addButton.Name = "addButton";
-            this.addButton.Text = "項目を追加…";
+            //
+            // addButton
+            //
             this.addButton.AutoSize = true;
-            this.addButton.MinimumSize = new System.Drawing.Size(90, 30);
+            this.addButton.Location = new System.Drawing.Point(8, 8);
             this.addButton.Margin = new System.Windows.Forms.Padding(4);
+            this.addButton.MinimumSize = new System.Drawing.Size(90, 30);
+            this.addButton.Name = "addButton";
+            this.addButton.Size = new System.Drawing.Size(90, 30);
+            this.addButton.TabIndex = 0;
+            this.addButton.Text = "項目を追加…";
             this.addButton.UseVisualStyleBackColor = true;
             this.addButton.Click += new System.EventHandler(this.AddButton_Click);
-            this.editButton.Name = "editButton";
-            this.editButton.Text = "編集…";
+            //
+            // editButton
+            //
             this.editButton.AutoSize = true;
-            this.editButton.MinimumSize = new System.Drawing.Size(90, 30);
+            this.editButton.Location = new System.Drawing.Point(106, 8);
             this.editButton.Margin = new System.Windows.Forms.Padding(4);
+            this.editButton.MinimumSize = new System.Drawing.Size(90, 30);
+            this.editButton.Name = "editButton";
+            this.editButton.Size = new System.Drawing.Size(90, 30);
+            this.editButton.TabIndex = 1;
+            this.editButton.Text = "編集…";
             this.editButton.UseVisualStyleBackColor = true;
             this.editButton.Click += new System.EventHandler(this.EditButton_Click);
-            this.duplicateButton.Name = "duplicateButton";
-            this.duplicateButton.Text = "複製…";
+            //
+            // duplicateButton
+            //
             this.duplicateButton.AutoSize = true;
-            this.duplicateButton.MinimumSize = new System.Drawing.Size(90, 30);
+            this.duplicateButton.Location = new System.Drawing.Point(204, 8);
             this.duplicateButton.Margin = new System.Windows.Forms.Padding(4);
+            this.duplicateButton.MinimumSize = new System.Drawing.Size(90, 30);
+            this.duplicateButton.Name = "duplicateButton";
+            this.duplicateButton.Size = new System.Drawing.Size(90, 30);
+            this.duplicateButton.TabIndex = 2;
+            this.duplicateButton.Text = "複製…";
             this.duplicateButton.UseVisualStyleBackColor = true;
             this.duplicateButton.Click += new System.EventHandler(this.DuplicateButton_Click);
-            this.deleteButton.Name = "deleteButton";
-            this.deleteButton.Text = "削除";
+            //
+            // deleteButton
+            //
             this.deleteButton.AutoSize = true;
-            this.deleteButton.MinimumSize = new System.Drawing.Size(90, 30);
+            this.deleteButton.Location = new System.Drawing.Point(302, 8);
             this.deleteButton.Margin = new System.Windows.Forms.Padding(4);
+            this.deleteButton.MinimumSize = new System.Drawing.Size(90, 30);
+            this.deleteButton.Name = "deleteButton";
+            this.deleteButton.Size = new System.Drawing.Size(90, 30);
+            this.deleteButton.TabIndex = 3;
+            this.deleteButton.Text = "削除";
             this.deleteButton.UseVisualStyleBackColor = true;
             this.deleteButton.Click += new System.EventHandler(this.DeleteButton_Click);
-            this.addPageButton.Name = "addPageButton";
-            this.addPageButton.Text = "ページを追加";
+            //
+            // addPageButton
+            //
             this.addPageButton.AutoSize = true;
-            this.addPageButton.MinimumSize = new System.Drawing.Size(90, 30);
+            this.addPageButton.Location = new System.Drawing.Point(400, 8);
             this.addPageButton.Margin = new System.Windows.Forms.Padding(4);
+            this.addPageButton.MinimumSize = new System.Drawing.Size(90, 30);
+            this.addPageButton.Name = "addPageButton";
+            this.addPageButton.Size = new System.Drawing.Size(90, 30);
+            this.addPageButton.TabIndex = 4;
+            this.addPageButton.Text = "ページを追加";
             this.addPageButton.UseVisualStyleBackColor = true;
             this.addPageButton.Click += new System.EventHandler(this.AddPageButton_Click);
-            this.commandsPanel.Name = "commandsPanel";
-            this.commandsPanel.Dock = System.Windows.Forms.DockStyle.Top;
+            //
+            // commandsPanel
+            //
             this.commandsPanel.AutoSize = true;
-            this.commandsPanel.WrapContents = true;
-            this.commandsPanel.Padding = new System.Windows.Forms.Padding(4);
             this.commandsPanel.Controls.Add(this.addButton);
             this.commandsPanel.Controls.Add(this.editButton);
             this.commandsPanel.Controls.Add(this.duplicateButton);
             this.commandsPanel.Controls.Add(this.deleteButton);
             this.commandsPanel.Controls.Add(this.addPageButton);
-            this.status.Name = "status";
-            this.status.Text = "1ページ = 2行 × 16列。右クリックメニューからもページを切り替えられます。";
+            this.commandsPanel.Dock = System.Windows.Forms.DockStyle.Top;
+            this.commandsPanel.Location = new System.Drawing.Point(8, 8);
+            this.commandsPanel.Name = "commandsPanel";
+            this.commandsPanel.Padding = new System.Windows.Forms.Padding(4);
+            this.commandsPanel.Size = new System.Drawing.Size(1042, 46);
+            this.commandsPanel.TabIndex = 1;
+            //
+            // status
+            //
             this.status.AutoSize = true;
-            this.status.Margin = new System.Windows.Forms.Padding(5, 9, 5, 5);
             this.status.Dock = System.Windows.Forms.DockStyle.Bottom;
+            this.status.Location = new System.Drawing.Point(8, 598);
+            this.status.Margin = new System.Windows.Forms.Padding(5, 9, 5, 5);
+            this.status.Name = "status";
+            this.status.Size = new System.Drawing.Size(351, 15);
+            this.status.TabIndex = 2;
+            this.status.Text = "1ページ = 2行 × 16列。右クリックメニューからもページを切り替えられます。";
+            //
+            // LauncherSettingsForm
+            //
+            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
+            this.ClientSize = new System.Drawing.Size(1064, 721);
             this.Body.Controls.Add(this.grid);
             this.Body.Controls.Add(this.commandsPanel);
             this.Body.Controls.Add(this.status);
-            this.Text = "ランチャー編集";
             this.Name = "LauncherSettingsForm";
+            this.Text = "ランチャー編集";
             ((System.ComponentModel.ISupportInitialize)(this.grid)).EndInit();
+            this.commandsPanel.ResumeLayout(false);
+            this.commandsPanel.PerformLayout();
             this.ResumeLayout(false);
-            this.PerformLayout();
+
         }
         #endregion
 

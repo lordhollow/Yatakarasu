@@ -32,6 +32,9 @@ namespace Yata.Settings
             foreach (var entry in entries)
                 if (!string.IsNullOrWhiteSpace(entry.IconPath) && !entry.IconPath.Contains("::") && !Path.IsPathRooted(entry.IconPath))
                     entry.IconPath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path)), entry.IconPath));
+            // AutoGenerateColumns is hidden from designer serialization, so set
+            // it at the data-binding boundary as well as defining the UI columns.
+            grid.AutoGenerateColumns = false;
             grid.DataSource = entries; UpdateStatus();
         }
         protected override void SaveDefinition(string path)

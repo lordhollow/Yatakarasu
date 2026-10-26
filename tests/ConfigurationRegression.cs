@@ -48,6 +48,7 @@ static class ConfigurationRegression
             Run("Karasu handles fragmented UTF-8 and oversized messages", Protocol);
             Run("Configuration screens load, save and render", Forms);
             Run("Settings forms load in the WinForms designer without runtime data", DesignerForms);
+            Run("Designer round trips retain editor content and grid columns", DesignerRoundTrips);
             Run("Replacing widgets preserves unrelated cached drawings", WidgetReplacement);
             Run("Premultiplied layers preserve transparent composition", PremultipliedLayers);
             Run("Window drawing buffers retain full-size frames without shrinking", DrawingBufferCapacity);
@@ -251,6 +252,14 @@ static class ConfigurationRegression
             Check(loaded.Entries.Count == 6 && loaded.Entries.Max(x => x.Page) == 3, "Adding a page did not save navigation actions.");
             Check(loaded.Entries[0].IconPath == Path.Combine(root, "icon.png"), "Saving to another directory broke a relative icon path.");
         }
+        using (var form = new LauncherSettingsForm())
+        {
+            var grid = Find<DataGridView>(form);
+            grid.AutoGenerateColumns = true; // The hidden property is omitted by the VS designer.
+            typeof(LauncherSettingsForm).GetMethod("LoadDefinition", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(form, new object[] { Path.Combine(root, "karasu.exec.txt") });
+            Check(!grid.AutoGenerateColumns && grid.Columns.Count == 6, "Designer save introduced auto-generated launcher columns.");
+        }
         using (var form = new LauncherEntryForm(Launcher().Entries[0], Path.Combine(root, "karasu.exec.txt")))
         {
             Preview(form, "launcher-entry.png");
@@ -290,6 +299,77 @@ static class ConfigurationRegression
                 }
             }
         }
+    }
+    static void DesignerRoundTrips()
+    {
+        var bodyField = typeof(ConfigurationEditorForm).GetField("Body", BindingFlags.Instance | BindingFlags.NonPublic);
+        using (var surface = new System.ComponentModel.Design.DesignSurface(typeof(ConfigurationEditorForm)))
+        {
+            var host = (System.ComponentModel.Design.IDesignerHost)surface.GetService(typeof(System.ComponentModel.Design.IDesignerHost));
+            var rootControl = (Control)host.RootComponent;
+            var body = (Panel)bodyField.GetValue(rootControl);
+            Check(ReferenceEquals(body.Parent, rootControl), "Editable inherited content is inside another inherited container.");
+            var inheritance = (System.ComponentModel.InheritanceAttribute)System.ComponentModel.TypeDescriptor.GetAttributes(body)[typeof(System.ComponentModel.InheritanceAttribute)];
+            Check(inheritance.InheritanceLevel != System.ComponentModel.InheritanceLevel.InheritedReadOnly, "Editor content is read-only in the designer.");
+            foreach (var type in new[] { typeof(SensorSettingsForm), typeof(LauncherSettingsForm), typeof(PlotEditor) })
+            using (var original = (Control)Activator.CreateInstance(type))
+            {
+                var originalBody = original is ConfigurationEditorForm ? (Control)bodyField.GetValue(original) : original;
+                CheckDesignerColumnNames(original);
+                var serializer = new System.ComponentModel.Design.Serialization.CodeDomComponentSerializationService(surface);
+                using (var sourceComponents = new System.ComponentModel.Container())
+                using (var store = serializer.CreateStore())
+                {
+                    foreach (Control part in originalBody.Controls) SerializeDesignerTree(serializer, store, sourceComponents, part);
+                    store.Close();
+                    Check(store.Errors.Count == 0, "Editor content could not be saved.");
+                    using (var container = new System.ComponentModel.Container())
+                    {
+                        var restored = serializer.Deserialize(store, container).Cast<object>().OfType<Control>().ToList();
+                        foreach (Control part in originalBody.Controls)
+                        {
+                            var copy = restored.Single(control => control.Name == part.Name);
+                            Check(DesignerShape(part) == DesignerShape(copy), type.Name + " lost controls or columns after designer save/load.\n" + DesignerShape(copy));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    static void CheckDesignerColumnNames(Control control)
+    {
+        foreach (var field in control.GetType().GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
+            .Where(field => field.DeclaringType.Assembly == typeof(ConfigurationEditorForm).Assembly))
+        {
+            if (!typeof(DataGridViewColumn).IsAssignableFrom(field.FieldType)) continue;
+            var column = field.GetValue(control) as DataGridViewColumn;
+            Check(column != null && column.Name == field.Name, control.GetType().Name + "." + field.Name + " has a conflicting designer component name.");
+        }
+        foreach (Control child in control.Controls) CheckDesignerColumnNames(child);
+    }
+    static void SerializeDesignerTree(System.ComponentModel.Design.Serialization.ComponentSerializationService serializer,
+        System.ComponentModel.Design.Serialization.SerializationStore store, System.ComponentModel.IContainer sourceComponents, Control control)
+    {
+        if (control is DataGridView grid)
+        {
+            foreach (DataGridViewColumn column in grid.Columns)
+            {
+                sourceComponents.Add(column, column.Name);
+                serializer.Serialize(store, column);
+            }
+        }
+        else if (!(control is PlotEditor))
+        {
+            foreach (Control child in control.Controls) SerializeDesignerTree(serializer, store, sourceComponents, child);
+        }
+        serializer.Serialize(store, control);
+    }
+    static string DesignerShape(Control control)
+    {
+        var result = control.GetType().Name + ":" + control.Name;
+        if (control is DataGridView grid)
+            result += "[" + string.Join(",", grid.Columns.Cast<DataGridViewColumn>().Select(column => column.Name + "=" + column.DataPropertyName + ":" + column.HeaderText)) + "]";
+        return result + "(" + string.Join("|", control.Controls.Cast<Control>().Select(DesignerShape)) + ")";
     }
     static T Find<T>(Control parent) where T : Control
     {

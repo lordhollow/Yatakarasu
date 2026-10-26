@@ -25,7 +25,7 @@ namespace Yata.Settings
         {
             if (Series.CurrentRow == null) return;
             using (var dialog = new ColorDialog()) if (dialog.ShowDialog(this) == DialogResult.OK)
-                Series.CurrentRow.Cells["Color"].Value = $"{dialog.Color.R},{dialog.Color.G},{dialog.Color.B}";
+                DataCell(Series.CurrentRow, "Color").Value = $"{dialog.Color.R},{dialog.Color.G},{dialog.Color.B}";
         }
         void DeleteButton_Click(object sender, EventArgs e)
         {
