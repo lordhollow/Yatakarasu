@@ -82,9 +82,11 @@ HWにアクセスせずに更新の失敗・復旧・重複防止・欠測表示
 
 ARGB形式の全画面3層を毎回合成すると、GDI+側で多数のページフォルトが発生することを再現できたため、描画用ビットマップはPArgb形式で保持する。
 さらにWinFormsのダブルバッファが毎回再確保されないよう、実クライアント領域に合わせて保持上限を設定する。ダブルバッファは引き続き有効。
+時計・ランチャーなどの画像も読み込み時にPArgb形式へ変換し、クリックの緑枠・赤枠の減衰中にアイコン全体を描き直しても変換領域を毎回確保しない。
 計測結果と再現方法は[調査記録](../docs/investigations/page-faults-2026-10-26.md)を参照。
 実プロセスの採取は`tools/diagnostics/measure-process-page-faults.ps1`、HWにアクセスしない描画単独試験は`tools/diagnostics/run-graphics-page-fault-probe.ps1`で実施できる。
 画面転送バッファの比較には`run-graphics-page-fault-probe.ps1 -WindowBuffers`を指定する。
+実ウィジェット・設定済みのアイコン・枠の表示から消去までを調べる場合は`tools/diagnostics/run-widget-page-fault-probe.ps1`を使う。起動コマンドは無害な内部処理に差し替え、外部アプリは起動しない。
 
 ## 実行方法
 karasu.exeを起動した状態で(3分以内に)karasu.exeを管理者権限で起動する。  

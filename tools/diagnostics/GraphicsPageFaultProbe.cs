@@ -115,9 +115,9 @@ static partial class GraphicsPageFaultProbe
         using (var graphics = Graphics.FromImage(bitmap)) graphics.DrawImageUnscaled(source, 0, 0);
         return bitmap;
     }
-    static void Measure(string name, int round, int iterations, Action action)
+    static void Measure(string name, int round, int iterations, Action action, int warmup = 30)
     {
-        for (int i = 0; i < 30; i++) action();
+        for (int i = 0; i < warmup; i++) action();
         GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
         var before = Memory();
         var gc0 = GC.CollectionCount(0); var gc1 = GC.CollectionCount(1); var gc2 = GC.CollectionCount(2);
