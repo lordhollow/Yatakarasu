@@ -24,7 +24,10 @@ namespace Yata.Components.Application
                 case "SetDisplayInput":
                     return new Application.SetDisplayInput();
                 case "SetDisplayToporogy":
+                case "SetDisplayTopology":
                     return new Application.SetDisplayToporogy();
+                case "MonitorPowerOff":
+                    return new Application.MonitorPowerOff();
                 case "SendKeyStroke":
                     return new Application.SendKeyStroke();
                 case "ToggleScreenKeyboard":

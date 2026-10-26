@@ -78,6 +78,9 @@
     <PackageReference Include="LibreHardwareMonitorLib" Version="[0.9.6]" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Components\Configuration\ConfigurationFile.cs" />
+    <Compile Include="Components\Configuration\LauncherDefinition.cs" />
+    <Compile Include="Components\Application\MonitorPowerOff.cs" />
     <Compile Include="Components\Application\ApplicationProvider.cs" />
     <Compile Include="Components\Application\SetDisplayInput.cs" />
     <Compile Include="Components\KeyStroke.cs" />

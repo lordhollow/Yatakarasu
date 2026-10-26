@@ -4,6 +4,8 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.IO;
+using Yata.Components.Configuration;
 
 namespace Yata.Components.Widget
 {
@@ -203,8 +205,8 @@ namespace Yata.Components.Widget
 
             if (ix < 0) return;
             if (iy < 0) return;
-            if (ix > Parameter.IconsColumns) return;
-            if (iy > Parameter.IconRows) return;
+            if (ix >= Parameter.IconsColumns) return;
+            if (iy >= Parameter.IconRows) return;
 
             var app = this[iy + LineOffset, ix];
 
@@ -237,6 +239,16 @@ namespace Yata.Components.Widget
             }
         }
         int _LineOffset;
+
+        public int PageCount => applications.Count == 0 ? 1 : applications.Keys.Max() / 32 + 1;
+        public int PageNumber => LineOffset / 2 + 1;
+        public event Action<string> SystemActionRequested;
+        public void ChangePage(int delta)
+        {
+            LineOffset = ((LineOffset / 2 + delta) % PageCount + PageCount) % PageCount * 2;
+            indicationLast = 0;
+            needUpdate = true;
+        }
 
         int posToApplicationIndex(int row, int col)
         {
@@ -281,54 +293,39 @@ namespace Yata.Components.Widget
         /// <param name="container"></param>
         public void LoadFromFile(string defFile, WidgetContainer container)
         {
-            this.defFile = defFile;
-            var lines = System.IO.File.ReadAllLines(defFile, Encoding.UTF8);
-            KarasKey = lines[0];
-            for (var i = 1; i < lines.Length; i++)
+            var definition = LauncherDefinition.Load(defFile);
+            var loaded = new Dictionary<int, LauncherApplication>();
+            foreach (var entry in definition.Entries)
             {
-                var parts = lines[i].Split('\t');
-                try
+                var app = new LauncherApplication
                 {
-                    if (parts.Length >= 4)
+                    Caption = entry.Caption, Option = entry.Option, DefinitionPath = Path.GetFullPath(defFile),
+                    Row = entry.Row, Column = entry.Column
+                };
+                if (entry.Command.StartsWith("internal::"))
+                    app.Application = GetInternalApplication(entry.Command.Substring("internal::".Length), container);
+                else app.Command = definition.Key;
+                if (!string.IsNullOrWhiteSpace(entry.IconPath))
+                {
+                    try
                     {
-                        var r = int.Parse(parts[0]);
-                        var c = int.Parse(parts[1]);
-                        var app = new LauncherApplication();
-                        app.Caption = parts[2];
-                        if (parts[3].StartsWith("internal::"))
-                        {
-                            app.Application = GetInternalApplication(parts[3].Substring("internal::".Length), container);
-                        }
-                        else
-                        {
-                            app.Command = KarasKey;
-                        }
-                        this[r, c] = app;
-
-                        //icon
-                        if (parts.Length >= 5)
-                        {
-                            if (parts[4] != "")
-                            {
-                                Rectangle atras;
-                                app.Image = CommonResource.LoadImage(parts[4], out atras);
-                                app.Atras = atras;
-                            }
-                        }
-
-                        //param
-                        if (parts.Length >= 6)
-                        {
-                            app.Option = parts[5];
-                        }
+                        var iconPath = entry.IconPath.Contains("::") || Path.IsPathRooted(entry.IconPath)
+                            ? entry.IconPath : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(defFile)), entry.IconPath);
+                        Rectangle atlas;
+                        app.Image = CommonResource.LoadImage(iconPath, out atlas);
+                        app.Atras = atlas;
                     }
+                    catch (Exception ex) when (ex is IOException || ex is ArgumentException || ex is UnauthorizedAccessException)
+                    { System.Diagnostics.Trace.TraceWarning(ex.Message); }
                 }
-                catch (FormatException)
-                {
-                    //r/cのパースに失敗。無視して次の行へ。(最初を数字以外で始めるとコメント行として使える。 *とか使う。
-                }
-                finally { }
+                loaded.Add(posToApplicationIndex(entry.Row, entry.Column), app);
             }
+            foreach (var app in applications.Values)
+                if (app.Image != null && !ReferenceEquals(app.Image, CommonResource.InternalApplicationIconsImage)) app.Image.Dispose();
+            applications = loaded;
+            this.defFile = defFile;
+            LineOffset = Math.Min(LineOffset, (PageCount - 1) * 2);
+            needUpdate = true;
         }
 
         /// <summary>
@@ -343,13 +340,19 @@ namespace Yata.Components.Widget
             switch (name)
             {
                 case "ReloadLauncher":
-                    return new Application.ActionInvoker(() => { applications.Clear(); LoadFromFile(defFile, container); needUpdate = true; });
+                    return new Application.ActionInvoker(() => LoadFromFile(defFile, container));
+                case "LauncherNextPage":
+                    return new Application.ActionInvoker(() => ChangePage(1));
+                case "LauncherPreviousPage":
+                    return new Application.ActionInvoker(() => ChangePage(-1));
+                case "EditSensors":
+                case "EditLauncher":
+                    return new Application.ActionInvoker(() => SystemActionRequested?.Invoke(name));
                 default:
                     return Application.ApplicationProvider.GetInternalApplication(name, container);
             }
         }
 
-        string KarasKey = "";
 
 
     }

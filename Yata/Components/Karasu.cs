@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Net.Sockets;
+using System.Collections.Concurrent;
+using System.Threading;
 
 namespace Yata.Components
 {
@@ -22,16 +24,16 @@ namespace Yata.Components
 
         public void Send(string cmd)
         {
-            //TODO::キューイング
-            sendCmd = cmd;
+            pending.Enqueue(cmd);
         }
 
         public void SendImmidiate(string cmd)
         {
-            SendRequest(cmd);
+            _ = SendRequest(cmd);
         }
 
-        string sendCmd = null;
+        readonly ConcurrentQueue<string> pending = new ConcurrentQueue<string>();
+        readonly SemaphoreSlim sendLock = new SemaphoreSlim(1, 1);
 
         int cnt = 9999;
 
@@ -42,20 +44,17 @@ namespace Yata.Components
             //if (!Active) return false;
             try
             {
-                if (!string.IsNullOrEmpty(sendCmd))
+                string command;
+                while (pending.TryDequeue(out command))
                 {
-                    if (Active)
-                    {
-                        SendRequest(sendCmd);
-                    }
-                    sendCmd = "";
+                    _ = SendRequest(command);
                     cnt = 0;
                 }
                 cnt++;
                 //ハートビートは30秒以内に届くようにする。ローカルだし20秒に1回ぐらい送っていればOK.
                 if (cnt > 10)
                 {
-                    SendRequest("HEARTBEAT");
+                    _ = SendRequest("HEARTBEAT");
                     cnt = 0;
                 }
             }
@@ -66,25 +65,31 @@ namespace Yata.Components
             return false;
         }
 
-        private async void SendRequest(string message)
+        private async Task SendRequest(string message)
         {
+            await sendLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
             await Task.Run(() =>
             {
                 try
                 {
                     LatestRequestTime = DateTime.Now;
-                    var client = new TcpClient();
-                    client.Connect("localhost", 54892);
-                    var dt = System.Text.Encoding.UTF8.GetBytes(message);
-                    client.GetStream().Write(dt, 0, dt.Length);
-                    client.Close();
+                    using (var client = new TcpClient())
+                    {
+                        client.Connect(System.Net.IPAddress.Loopback, 54892);
+                        var dt = System.Text.Encoding.UTF8.GetBytes(message);
+                        client.GetStream().Write(dt, 0, dt.Length);
+                    }
                     Active = true;
                 }
                 catch
                 {
                     Active = false;
                 }
-            });
+            }).ConfigureAwait(false);
+            }
+            finally { sendLock.Release(); }
         }
     }
 

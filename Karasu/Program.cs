@@ -49,13 +49,7 @@ namespace Karasu
                 //接続されるまで待つ。これはYataのReady待機の意味。一回データを受け取ったらもう切っていい。
                 Log("WAIT");
                 File.AppendAllText("log.txt", $"{DateTime.Now}\tWAIT YATA\r\n");
-                var buffer = new byte[4096];
                 var listener = new TcpListener(System.Net.IPAddress.Loopback, 54892);
-                listener.Start();
-                var client = listener.AcceptTcpClient();
-                var sz = client.GetStream().Read(buffer, 0, 4096);
-                client.Close();
-                Log("CHECKED");
                 listener.Start();
 
                 bool living = true;
@@ -65,17 +59,12 @@ namespace Karasu
                     if (listener.Pending())
                     {
                         //一回処理する。
-                        var msg = listener.AcceptTcpClient();
-                        Console.WriteLine(msg.Client.RemoteEndPoint.ToString());
-                        var s = msg.GetStream().Read(buffer, 0, 4096);
-                        var cmd = System.Text.Encoding.UTF8.GetString(buffer, 0, s);
-                        client.Close();
-                        if (msg.Client.RemoteEndPoint.ToString().StartsWith("127.0.0.1:"))
-                        {   //リモートホストからのみ受け付ける
-                            DispatchCommand(cmd);
+                        try
+                        {
+                            using (var msg = listener.AcceptTcpClient())
+                                DispatchCommand(ReadCommand(msg.GetStream()));
                         }
-                        //File.AppendAllText("log.txt", $"{DateTime.Now}\t{cmd}\r\n");
-                        listener.Start();
+                        catch (Exception ex) { ErrorLog(ex); }
                         cnt = 0;
                     }
                     else
@@ -98,6 +87,7 @@ namespace Karasu
                     }
                 }
                 Log("EXIT KARAS");
+                listener.Stop();
 
             }
             catch (Exception e)
@@ -107,6 +97,22 @@ namespace Karasu
         }
 
         private static bool ExitRequest = false;
+
+        private static string ReadCommand(System.IO.Stream stream)
+        {
+            if (stream.CanTimeout) stream.ReadTimeout = 3000;
+            using (var buffer = new MemoryStream())
+            {
+                var block = new byte[4096];
+                int read;
+                while ((read = stream.Read(block, 0, block.Length)) != 0)
+                {
+                    if (buffer.Length + read > 65536) throw new InvalidDataException("Command is too long.");
+                    buffer.Write(block, 0, read);
+                }
+                return System.Text.Encoding.UTF8.GetString(buffer.ToArray());
+            }
+        }
 
         private static void ErrorLog(Exception e)
         {
@@ -163,11 +169,20 @@ namespace Karasu
                 Log(cmd);
                 ExitRequest = true;
             }
+            else if (cmd.StartsWith("EXEC2\t"))
+            {
+                var parts = cmd.Split('\t');
+                int row, column;
+                if (parts.Length != 5 || !int.TryParse(parts[2], out row) || !int.TryParse(parts[3], out column)) return;
+                var definitionPath = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(parts[4]));
+                ExecutePosition(parts[1], row, column, definitionPath);
+            }
             else if (cmd.StartsWith("EXEC\t"))
             {
                 Log(cmd);
                 //実行コマンド。
                 var parts = cmd.Split('\t');
+                if (parts.Length < 4) return;
                 Execute(parts[1], parts[2], parts[3]);
 
             }
@@ -176,6 +191,7 @@ namespace Karasu
                 Log(cmd);
                 //実行モード
                 var parts = cmd.Split('\t');
+                if (parts.Length < 2) return;
                 var fn = YataFile("karasu.exec.bat");
                 if (parts[1] == "KarasProcessStart")
                 {
@@ -243,6 +259,21 @@ namespace Karasu
                 info.WorkingDirectory = Path.GetDirectoryName(cmd);
             }
             Process.Start(info);
+        }
+
+        private static void ExecutePosition(string key, int row, int column, string definitionPath)
+        {
+            var lines = File.ReadAllLines(definitionPath);
+            if (lines.Length == 0 || lines[0] != key) return;
+            foreach (var line in lines.Skip(1))
+            {
+                var parts = line.Split('\t');
+                int candidateRow, candidateColumn;
+                if (parts.Length < 4 || !int.TryParse(parts[0], out candidateRow) || !int.TryParse(parts[1], out candidateColumn)) continue;
+                if (candidateRow != row || candidateColumn != column || parts[3].StartsWith("internal::")) continue;
+                Open(parts[3], parts.Length > 5 ? parts[5] : "");
+                return;
+            }
         }
 
         private static string YataFile(string name)

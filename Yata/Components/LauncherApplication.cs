@@ -41,6 +41,9 @@ namespace Yata.Components
         /// コマンドラインオプション、または内部アプリのオプション
         /// </summary>
         public string Option;
+        public string DefinitionPath;
+        public int Row;
+        public int Column;
 
         /// <summary>
         /// アプリケーションの実行
@@ -54,7 +57,8 @@ namespace Yata.Components
             }
             else if (!string.IsNullOrEmpty(Command))
             {
-                var msg = $"EXEC\t{Command}\t{Caption}\t{Option}\t";
+                var path = Convert.ToBase64String(Encoding.UTF8.GetBytes(DefinitionPath));
+                var msg = $"EXEC2\t{Command}\t{Row}\t{Column}\t{path}";
                 //モニタリングのために管理者権限で動いているので
                 //一般ユーザーで起動するようにしないとダメ。。。
                 karasu.Send(msg);
