@@ -2,11 +2,16 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Reflection.Emit;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 //using OpenHardwareMonitor.Hardware;
 using LibreHardwareMonitor.Hardware;
+using LibreHardwareMonitor.Hardware.Cpu;
+using LibreHardwareMonitor.PawnIo;
 
 namespace Yata.Components
 {
@@ -100,10 +105,18 @@ namespace Yata.Components
         {
             var updateList = new List<IHardware>();
             var sensList = new List<ISensor>();
-
+            var nreg = new Regex(@"^\((.+)\)(.+)");
             var reg = new Regex(@"^(.+)/(\d+)-(\d+)$");
-            foreach (var sensor in sensorUsage)
+            foreach (var scode in sensorUsage)
             {
+                var sensor = scode;
+                var name = "";
+                var n = nreg.Match(scode);
+                if (n.Success)
+                {
+                    name = n.Groups[1].Value;
+                    sensor = n.Groups[2].Value;
+                }
                 var m = reg.Match(sensor);
                 if (m.Success)
                 {
@@ -113,7 +126,8 @@ namespace Yata.Components
                     var l = new List<ISensor>();
                     for (var i = s; i <= e; i++)
                     {
-                        var sens = AllSensors?.Find(x => x.Identifier.ToString() == $"{b}/{i}");
+                        //var sens = AllSensors?.Find(x => x.Identifier.ToString() == $"{b}/{i}");
+                        var sens = Select($"{b}/{i}", name);
                         if (sens != null)
                         {
                             addToUpdateList(updateList, sens.Hardware);
@@ -132,7 +146,8 @@ namespace Yata.Components
                     var l = new List<ISensor>();
                     foreach (var s in sensors)
                     {
-                        var sens = GetSensorById(s);
+                        //var sens = GetSensorById(s);
+                        var sens = Select(s, name);
                         if (sens != null)
                         {
                             addToUpdateList(updateList, sens.Hardware);
@@ -147,7 +162,8 @@ namespace Yata.Components
                 }
                 else
                 {
-                    var sens = AllSensors?.Find(x => x.Identifier.ToString() == sensor);
+                    //var sens = AllSensors?.Find(x => x.Identifier.ToString() == sensor);
+                    var sens = Select(sensor, name);
                     if (sens != null)
                     {
                         addToUpdateList(updateList, sens.Hardware);
@@ -168,13 +184,47 @@ namespace Yata.Components
         {
             get
             {
-                var d = UpdateTargetSensor?.Find(x => x.Identifier.ToString() == id);
+                var nreg = new Regex(@"^\((.+)\)(.+)");
+                var n = nreg.Match(id);
+                ISensor d;
+                if (n.Success)
+                {
+                    d = SelectFromUpdateTarget(n.Groups[2].Value, n.Groups[1].Value);
+                }
+                else
+                {
+                    d = SelectFromUpdateTarget(id);
+                }
                 if (d == null)
                 {
                     d = new ErrorSensor();
                 }
                 return d;
             }
+        }
+
+        /// <summary>
+        /// 全センサーからidに一致するものを取る。nameが指定されるとき、センサーが複数見つかればnameを含む法を返す。id一致しない場合はnull
+        /// </summary>
+        /// <param name="id"></param>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        public ISensor Select(string id, string name = null)
+        {
+            var found = AllSensors.FindAll(x => x.Identifier.ToString() == id);
+            if (found.Count == 0) return null;
+            if (found.Count == 1) return found[0];
+            if (string.IsNullOrEmpty(name)) return found[0];
+            return found.Find(x => x.Name.Contains(name));
+        }
+
+        public ISensor SelectFromUpdateTarget(string id, string name=null)
+        {
+            var found = UpdateTargetSensor.FindAll(x => x.Identifier.ToString() == id);
+            if (found.Count == 0) return null;
+            if (found.Count == 1) return found[0];
+            if (string.IsNullOrEmpty(name)) return found[0];
+            return found.Find(x => x.Name.Contains(name));
         }
 
         /// <summary>
@@ -259,6 +309,7 @@ namespace Yata.Components
             {
                 foreach (var hw in UpdateTargetHardware)
                 {
+                    //TODO::ここで秒間120ぐらいのページフォールトが起きるみたい
                     hw.Update();
                 }
 

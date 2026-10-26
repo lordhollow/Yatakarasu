@@ -1,5 +1,27 @@
 ﻿# ヤタガラス
 
+## ビルド
+
+Visual Studio 2022の「.NET デスクトップ開発」と.NET Framework 4.7.2のターゲットパックを使用する。
+Developer PowerShellでリポジトリのルートから以下を実行する。
+
+```powershell
+msbuild Yata.sln /t:Restore /p:Configuration=Debug /p:Platform=x64 /p:RestoreLockedMode=true
+msbuild Yata.sln /t:Build /p:Configuration=Debug /p:Platform=x64
+```
+
+Releaseをビルドするときは、両方のコマンドの`Configuration`を`Release`に変更する。
+NuGetパッケージは`PackageReference`で管理し、`Yata/packages.lock.json`で間接依存も固定する。
+依存バージョンを更新するときだけ`RestoreLockedMode`を指定せずに復元し、ロックファイルの差分も確認する。
+
+LibreHardwareMonitorLibはNuGetの安定版0.9.6を使用し、`win-x64`用の実装と依存DLLをビルド出力に配置する。
+以前のWinRing0に代わりPawnIOを使用するため、CPU温度やマザーボードのセンサー取得には
+[PawnIO](https://pawnio.eu/)の別途インストールが必要。NuGetの復元はドライバをインストールしない。
+切り替えの経緯は[公式PR](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/pull/1857)を参照。
+
+実行用の画像・設定は従来どおり各exeと同じフォルダの`files/`に配置する。
+配布時にはビルド出力の依存DLLと`Yata.exe.config`も含める。
+
 ## 実行方法
 karasu.exeを起動した状態で(3分以内に)karasu.exeを管理者権限で起動する。  
 karasu.exeに"+yata"オプションをつけて起動すると上記動作を行うので、以下をショートカットで作成しておくとよい。
