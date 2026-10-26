@@ -79,6 +79,7 @@ namespace Yata.Components.Application
                             break;
                     }
                     monitor.Value.SetInputSource(dinputNo);
+                    GlobalWindowUtil.RestoreForground();
                 }
             }
             finally

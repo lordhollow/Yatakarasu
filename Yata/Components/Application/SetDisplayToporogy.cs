@@ -44,6 +44,7 @@ namespace Yata.Components.Application
         {
             //SDC_TOPOLOGY_XXXとSDC_APPLYを合わせて渡す。その場合ほかのパラメータは全部不要なので0 or NULL を渡す。
             SetDisplayConfig(0, IntPtr.Zero, 0, IntPtr.Zero, (UInt32)t | SDC_APPLY);
+            GlobalWindowUtil.RestoreForground();
         }
 
         public void Execute(Karasu karasu, string option)

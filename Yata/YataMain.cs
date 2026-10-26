@@ -11,6 +11,7 @@ using Yata.Components;
 using Yata.Components.Widget;
 using Yata.Components.Application;
 using System.Threading;
+using System.Runtime.InteropServices;
 
 namespace Yata
 {
@@ -171,6 +172,11 @@ namespace Yata
 
         private void tmUpdate_Tick(object sender, EventArgs e)
         {
+            if (!this.Focused)
+            {
+                GlobalWindowUtil.BackupForground();
+            }
+
             if (diagnostics.Do())   //container.Update
             {
                 CheckPosition();
@@ -225,4 +231,27 @@ namespace Yata
         }
 
     }
+
+    class GlobalWindowUtil
+    {
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        static extern bool SetForegroundWindow(IntPtr hWnd);
+
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+        static IntPtr prevWindow = IntPtr.Zero;
+
+        public static void BackupForground()
+        {
+            prevWindow = GetForegroundWindow();
+        }
+
+        public static void RestoreForground()
+        {
+            SetForegroundWindow(prevWindow);
+        }
+    }
+
 }
