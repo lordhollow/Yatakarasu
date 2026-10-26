@@ -18,6 +18,7 @@ namespace Yata.Components.Widget
         float prev;
         string disp;
         bool needUpdate;
+        bool hasValue;
         Font font;
         ISensor target;
 
@@ -42,9 +43,12 @@ namespace Yata.Components.Widget
             //垂直バーと全く同じだから親クラスまとめてもいいかも
             var ret = needUpdate;
             needUpdate = false;
-            try
+            var sample = target.Value;
+            if (hasValue != sample.HasValue) ret = true;
+            hasValue = sample.HasValue;
+            if (hasValue)
             {
-                var v = target.Value.Value;
+                var v = sample.Value;
                 if (v < min) v = min;
                 if (v > max) v = max;
                 if (v != prev) ret = true;
@@ -58,7 +62,10 @@ namespace Yata.Components.Widget
                     disp = $"{prev:0.0}";
                 }
             }
-            finally { }
+            else
+            {
+                disp = "N/A";
+            }
             return ret;
         }
 
@@ -73,7 +80,7 @@ namespace Yata.Components.Widget
             Brush b = Brushes.DarkSlateBlue;
             if (barPos > 180) b = Brushes.DarkOrange;
             if (barPos > 250) b = Brushes.DarkRed;
-            if (prev != min)
+            if (hasValue && prev != min)
             {
                 graphics.FillPie(b, new Rectangle(2, 2, Width - 4, Height - 4), -90, barPos);
             }

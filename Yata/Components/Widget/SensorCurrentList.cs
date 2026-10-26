@@ -67,12 +67,19 @@ namespace Yata.Components.Widget
                 var name = string.IsNullOrEmpty(s.DisplayName) ? s.Sensor.Name : s.DisplayName;
                 graphics.DrawString(name, font, Brushes.LightGray, 8, y);
 
-                var current = smoothing(i, s.Sensor.Value.Value);
-                var numBrush = Brushes.LightGray;
-                if (current <= LowValueThreashold) numBrush = Brushes.Gray;
-                if (current > HighValueThreashold) numBrush = Brushes.Red;
-
-                graphics.DrawString($"{current,4:0.0} {Unit}", font, numBrush, 82, y);
+                var sample = s.Sensor.Value;
+                if (sample.HasValue)
+                {
+                    var current = smoothing(i, sample.Value);
+                    var numBrush = Brushes.LightGray;
+                    if (current <= LowValueThreashold) numBrush = Brushes.Gray;
+                    if (current > HighValueThreashold) numBrush = Brushes.Red;
+                    graphics.DrawString($"{current,4:0.0} {Unit}", font, numBrush, 82, y);
+                }
+                else
+                {
+                    graphics.DrawString($" N/A {Unit}", font, Brushes.Gray, 82, y);
+                }
                 DrawIndicatorColor(graphics, y, s.Color);
                 y += 14;
             }

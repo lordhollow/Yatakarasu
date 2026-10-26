@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Reflection.Emit;
 using System.Text;
@@ -22,6 +25,7 @@ namespace Yata.Components
     public class HardwareMonitor : IDisposable, IUpdatable
     {
         Computer computer;
+        int updateInProgress;
 
         public static HardwareMonitor DefaultInstance { get; private set; }
 
@@ -278,47 +282,93 @@ namespace Yata.Components
         /// </summary>
         public bool Update()
         {
+            //遅いストレージなどの更新が次の周期まで続いても、同じ機器を同時更新しない。
+            if (Interlocked.CompareExchange(ref updateInProgress, 1, 0) != 0) return false;
             if (UpdateAsync)
             {
-                updateHardwareAsync();
+                _ = updateHardwareAsync();
             }
             else
             {
-                updateHardware();
+                try
+                {
+                    updateHardware();
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref updateInProgress, 0);
+                }
             }
             return false;
         }
 
-        private async void updateHardwareAsync()
+        private async Task updateHardwareAsync()
         {
-            //100～200msぐらいかかるため非同期。UpdateRateは最低でも３、できれば５以上必要で、10あればよい。
-            await Task.Run((Action)updateHardware);
+            try
+            {
+                await Task.Run((Action)updateHardware).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                //async voidからUIスレッドへ例外を送らず、次の周期で再試行する。
+                HardwareUpdateLog.Failure("Update cycle", ex);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref updateInProgress, 0);
+            }
         }
 
         private void updateHardware()
         {
-            //全部をシーケンシャルにすると150～250msぐらい。パラレルにすると100ぐらいになる。
+            var succeeded = new bool[UpdateTargetHardware.Count];
             if (UpdateParall)
             {
-                //意外とかかるのでちょっと早い
-                Parallel.ForEach(UpdateTargetHardware, (x) => x.Update());
-                //ここは即終わるのであまり効果がない
-                Parallel.ForEach(UpdateTargetSensor, (sensor) => (sensor as ValueHistorySensor).Update());
+                Parallel.For(0, succeeded.Length,
+                    i => succeeded[i] = TryUpdateHardware(UpdateTargetHardware[i]));
             }
             else
             {
-                foreach (var hw in UpdateTargetHardware)
+                for (var i = 0; i < succeeded.Length; i++)
                 {
-                    //TODO::ここで秒間120ぐらいのページフォールトが起きるみたい
-                    hw.Update();
-                }
-
-                foreach (var sensor in UpdateTargetSensor)
-                {
-                    (sensor as ValueHistorySensor).Update();
+                    succeeded[i] = TryUpdateHardware(UpdateTargetHardware[i]);
                 }
             }
+
+            var failedHardware = new HashSet<IHardware>(
+                UpdateTargetHardware.Where((hw, i) => !succeeded[i]));
+            foreach (ValueHistorySensor sensor in UpdateTargetSensor)
+            {
+                var target = "Sensor " + sensor.Identifier;
+                try
+                {
+                    sensor.Update(failedHardware);
+                    HardwareUpdateLog.Success(target);
+                }
+                catch (Exception ex)
+                {
+                    sensor.Value = null;
+                    HardwareUpdateLog.Failure(target, ex);
+                }
+            }
+            HardwareUpdateLog.Success("Update cycle");
             Age++;
+        }
+
+        internal static bool TryUpdateHardware(IHardware hardware)
+        {
+            var target = "Hardware " + hardware.Identifier;
+            try
+            {
+                hardware.Update();
+                HardwareUpdateLog.Success(target);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                HardwareUpdateLog.Failure(target, ex);
+                return false;
+            }
         }
 
         #endregion
@@ -358,6 +408,7 @@ namespace Yata.Components
     /// </remarks>
     public class ValueHistorySensor : ISensor, IColorArranged
     {
+        readonly object historyLock = new object();
         ISensor baseSensor;
         ISensor[] baseSensors;
         Identifier localId;
@@ -395,33 +446,31 @@ namespace Yata.Components
 
         public float? Value
         {
-            get => inValue;
+            get { lock (historyLock) { return inValue; } }
             set
             {
-                //Todo::履歴への書き込み
-                inValue = value;
-                if (!value.HasValue) return;
-                value = (float)Math.Round(value.Value, 1);  //小数点1桁に丸め
-                if (ValuesTimeWindow != TimeSpan.Zero)
+                lock (historyLock)
                 {
-                    //RunlengthSetter(value);
-                    AverageSetter(value);
-                }
-                //最初より2番目の時間が今よりWindow分前なら捨てる（2番目で判定するのは、最初を捨ててしまうと二番目のデータまでの時間のデータが無になるため。
-                //記録時間(10分)以上スリープしていると全データが古くなっている可能性があり、
-                //そういうデータをすべて削除する意味でも、削除するものがなくなるまで繰り返し削除する。
-                bool checking = true;
-                while (checking)
-                {
-                    checking = false;
-                    if (sensorValues.Count >= 2)
+                    inValue = value;
+                    if (!value.HasValue)
                     {
-                        var sv = sensorValues.First.Next.Value;
-                        if (sv.Time + ValuesTimeWindow < DateTime.Now)
+                        total = 0;
+                        averageCounter = 0;
+                        return;
+                    }
+                    value = (float)Math.Round(value.Value, 1);  //小数点1桁に丸め
+                    if (ValuesTimeWindow != TimeSpan.Zero)
+                    {
+                        AverageSetter(value);
+                    }
+                    //2番目の標本までが期間外なら先頭を削除する。長時間休止した場合も繰り返す。
+                    while (sensorValues.Count >= 2)
+                    {
+                        if (sensorValues.First.Next.Value.Time + ValuesTimeWindow >= DateTime.Now)
                         {
-                            sensorValues.RemoveFirst();
-                            checking = true;    //削除したらもう一回。
+                            break;
                         }
+                        sensorValues.RemoveFirst();
                     }
                 }
             }
@@ -475,14 +524,18 @@ namespace Yata.Components
 
         public IEnumerable<SensorValue> Values
         {
-            get => sensorValues;
+            get { lock (historyLock) { return sensorValues.ToArray(); } }
         }
 
         public void ClearValues()
         {
-            //TODO::履歴のクリア
-            sensorValues.Clear();
-            latestSensorValue = null;
+            lock (historyLock)
+            {
+                sensorValues.Clear();
+                latestSensorValue = null;
+                total = 0;
+                averageCounter = 0;
+            }
         }
 
         public TimeSpan ValuesTimeWindow { get; set; }
@@ -493,14 +546,29 @@ namespace Yata.Components
             {
                 Value = baseSensor.Value;
             }
-            else if (sumup)
-            {
-                Value = baseSensors.Select(x => x.Value).Sum();
-            }
             else
             {
-                Value = baseSensors.Select(x => x.Value).Average();
+                var values = baseSensors.Select(x => x.Value).ToArray();
+                Value = values.Any(x => !x.HasValue) ? (float?)null
+                    : sumup ? values.Sum() : values.Average();
             }
+        }
+
+        internal void Update(ISet<IHardware> failedHardware)
+        {
+            //合計・平均の元センサーも含め、失敗した機器の古い値を新しい標本にしない。
+            foreach (var sensor in baseSensors ?? new[] { baseSensor })
+            {
+                for (var hw = sensor.Hardware; hw != null; hw = hw.Parent)
+                {
+                    if (failedHardware.Contains(hw))
+                    {
+                        Value = null;
+                        return;
+                    }
+                }
+            }
+            Update();
         }
 
         /// <summary>
@@ -527,7 +595,7 @@ namespace Yata.Components
         }
         public void VisitHardware(IHardware hardware)
         {
-            hardware.Update();
+            HardwareMonitor.TryUpdateHardware(hardware);
             foreach (var sensor in hardware.Sensors)
             {
                 sensor.ValuesTimeWindow = TimeSpan.Zero;
@@ -565,5 +633,37 @@ namespace Yata.Components
         }
         public void VisitSensor(ISensor sensor) { }
         public void VisitParameter(IParameter parameter) { }
+    }
+
+    internal static class HardwareUpdateLog
+    {
+        static readonly ConcurrentDictionary<string, byte> failures = new ConcurrentDictionary<string, byte>();
+        static readonly object fileLock = new object();
+
+        public static void Success(string target)
+        {
+            byte ignored;
+            failures.TryRemove(target, out ignored);
+        }
+
+        public static void Failure(string target, Exception exception)
+        {
+            //同じ機器が連続失敗している間は初回だけ記録し、ログの肥大化を避ける。
+            if (!failures.TryAdd(target, 0)) return;
+            var message = $"{DateTime.Now:O}\t{target}\r\n{exception}\r\n";
+            try
+            {
+                Trace.TraceError(message);
+                lock (fileLock)
+                {
+                    File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                        "hardware-monitor.errors.log"), message);
+                }
+            }
+            catch (Exception)
+            {
+                //ログを書けなくても監視処理は継続する。
+            }
+        }
     }
 }
