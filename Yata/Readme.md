@@ -67,6 +67,27 @@ ID欄には従来の範囲平均・合計の記法も入力できる。元ファ
 ./tests/run-hardware-monitor-tests.ps1
 ```
 
+### Visual Studioで設定画面を調整する
+
+ソリューションを一度ビルドし、`Settings`配下のフォームの`.cs`を右クリック →「デザイナーの表示」（Shift+F7）で開く。
+コントロールの生成・配置・初期プロパティ・イベント接続は、各`.Designer.cs`の`InitializeComponent`で定義する。
+引数なしコンストラクターは画面の初期化だけを行い、設定ファイル読み込み・画像読み込みは実行時の引数付きコンストラクター、Steam検索は実行時のShownで行う。
+
+| 編集対象 | ファイル |
+| --- | --- |
+| センサー設定 | `Settings/SensorSettingsForm.cs` |
+| ランチャー一覧 | `Settings/LauncherSettingsForm.cs` |
+| ランチャー項目 | `Settings/LauncherEntryForm.cs` |
+| センサー選択 | `Settings/SensorPickerForm.cs` |
+| アイコン選択 | `Settings/IconPickerForm.cs` |
+| Steamソフト選択 | `Settings/SteamPickerForm.cs` |
+| 設定ファイル選択・保存ボタンなどの共通枠 | `Settings/ConfigurationEditorForm.cs` |
+| グラフの編集欄（2個に共通） | `Settings/PlotEditor.cs` |
+
+共通枠の中央の`Body`パネルへ各設定フォームのコントロールを配置する。グラフの欄は`PlotEditor`をユーザーコントロールとして編集する。
+グリッドの列の`Name`・`DataPropertyName`はデータの読み書きにも使うため、表示見出しの変更には`HeaderText`を使う。
+構成回帰テストでは、全8画面・部品のデザイナーホストへの読み込みとCodeDOMシリアライズ、実行時の保存・表示を検証する。
+
 ## センサー取得に失敗した場合
 
 機器の更新に失敗しても、ほかの機器の監視は継続する。失敗した機器とその合計・平均センサーは`N/A`表示になり、次の更新周期で再試行する。

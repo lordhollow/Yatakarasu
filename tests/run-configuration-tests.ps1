@@ -14,7 +14,7 @@ Copy-Item -LiteralPath (Join-Path $testOutput 'Yata.exe.config') -Destination "$
 & $compilerPath /nologo /target:exe /platform:x64 /langversion:7.3 "/out:$testExe" `
     "/reference:$(Join-Path $testOutput 'Yata.exe')" `
     "/reference:$(Join-Path $testOutput 'LibreHardwareMonitorLib.dll')" `
-    /reference:System.Drawing.dll /reference:System.Windows.Forms.dll (Join-Path $PSScriptRoot 'ConfigurationRegression.cs')
+    /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:System.Design.dll (Join-Path $PSScriptRoot 'ConfigurationRegression.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Configuration test compilation failed.' }
 & $testExe
 if ($LASTEXITCODE -ne 0) { throw 'Configuration tests failed.' }

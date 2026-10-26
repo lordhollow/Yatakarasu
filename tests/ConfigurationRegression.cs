@@ -47,6 +47,7 @@ static class ConfigurationRegression
             Run("Karasu resolves the selected file and exact slot without launching", ResolvePosition);
             Run("Karasu handles fragmented UTF-8 and oversized messages", Protocol);
             Run("Configuration screens load, save and render", Forms);
+            Run("Settings forms load in the WinForms designer without runtime data", DesignerForms);
             Run("Replacing widgets preserves unrelated cached drawings", WidgetReplacement);
             Run("Premultiplied layers preserve transparent composition", PremultipliedLayers);
             Run("Window drawing buffers retain full-size frames without shrinking", DrawingBufferCapacity);
@@ -59,6 +60,7 @@ static class ConfigurationRegression
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+        finally { Application.Exit(); }
     }
     static void Run(string name, Action action) { action(); passed++; Console.WriteLine("PASS: " + name); }
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }
@@ -259,6 +261,35 @@ static class ConfigurationRegression
             Check(form.Entry.Command == "internal::MonitorPowerOff" && form.Entry.Option == "", "Selecting a system app retained external arguments.");
         }
         using (var form = new IconPickerForm(new[] { Path.Combine(Environment.SystemDirectory, "shell32.dll") })) Preview(form, "icon-picker.png");
+    }
+    static void DesignerForms()
+    {
+        foreach (var type in new[] { typeof(ConfigurationEditorForm), typeof(SensorSettingsForm), typeof(LauncherSettingsForm), typeof(LauncherEntryForm), typeof(SensorPickerForm), typeof(IconPickerForm), typeof(SteamPickerForm), typeof(PlotEditor) })
+        {
+            using (var surface = new System.ComponentModel.Design.DesignSurface())
+            {
+                surface.BeginLoad(type);
+                var errors = string.Join("\n", surface.LoadErrors.Cast<object>().Select(x => x.ToString()));
+                Check(surface.IsLoaded && surface.LoadErrors.Count == 0, type.Name + " failed to load in the designer: " + errors);
+                var host = (System.ComponentModel.Design.IDesignerHost)surface.GetService(typeof(System.ComponentModel.Design.IDesignerHost));
+                var control = (Control)host.RootComponent;
+                Check(control.Controls.Count > 0 && host.GetDesigner(control) != null, type.Name + " has no editable design surface.");
+                if (control is SensorSettingsForm)
+                {
+                    Check(Find<TabControl>(control).TabPages.Count == 3, "Sensor tabs require runtime setup.");
+                    Check(Find<DataGridView>(control).Columns.Count == 5, "Sensor columns require runtime setup.");
+                }
+                if (control is LauncherSettingsForm)
+                    Check(Find<DataGridView>(control).Columns.Count == 6, "Launcher columns require runtime setup.");
+                var serializer = new System.ComponentModel.Design.Serialization.CodeDomComponentSerializationService(surface);
+                using (var store = serializer.CreateStore())
+                {
+                    serializer.Serialize(store, control);
+                    store.Close();
+                    Check(store.Errors.Count == 0, type.Name + " failed designer serialization: " + string.Join("\n", store.Errors.Cast<object>()));
+                }
+            }
+        }
     }
     static T Find<T>(Control parent) where T : Control
     {
