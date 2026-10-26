@@ -56,9 +56,11 @@ namespace Yata
         {
             width = logicalWidth;
             height = logicalHeight;
-            Background = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-            Overlay = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-            BackSurface = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            //ARGBのまま合成するとGDI+が描画ごとに変換用の一時領域を確保する。
+            //最初から乗算済みアルファで保持し、全画面3層の繰り返し変換を避ける。
+            Background = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            Overlay = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            BackSurface = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
 
             //毎回更新するわけではないものはここで作る
             using (var g = Graphics.FromImage(Background))

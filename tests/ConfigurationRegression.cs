@@ -46,6 +46,7 @@ static class ConfigurationRegression
             Run("Karasu handles fragmented UTF-8 and oversized messages", Protocol);
             Run("Configuration screens load, save and render", Forms);
             Run("Replacing widgets preserves unrelated cached drawings", WidgetReplacement);
+            Run("Premultiplied layers preserve transparent composition", PremultipliedLayers);
             Console.WriteLine("All " + passed + " configuration checks passed.");
             foreach (var image in images) Console.WriteLine("PREVIEW: " + image);
             return 0;
@@ -290,6 +291,58 @@ static class ConfigurationRegression
         public override bool Update() { var result = first; first = false; return result; }
         public override void Draw(Graphics graphics) { using (var brush = new SolidBrush(color)) graphics.FillRectangle(brush, 0, 0, 24, 24); }
         public override void Dispose() { Disposed = true; }
+    }
+    static void PremultipliedLayers()
+    {
+        foreach (var brightness in new[] { 1f, 0.45f, 0f })
+        using (var expected = RenderLayers(false, brightness))
+        using (var actual = RenderLayers(true, brightness))
+        {
+            for (int y = 0; y < 128; y++)
+            for (int x = 0; x < 192; x++)
+            {
+                var a = expected.GetPixel(x, y); var b = actual.GetPixel(x, y);
+                Check(Math.Abs(a.R - b.R) <= 2 && Math.Abs(a.G - b.G) <= 2 && Math.Abs(a.B - b.B) <= 2 && a.A == b.A,
+                    "Premultiplied alpha changed the rendered result beyond rounding tolerance.");
+            }
+        }
+    }
+    static Bitmap RenderLayers(bool premultiplied, float brightness)
+    {
+        var container = new WidgetContainer(); container.Initialize(1280, 800);
+        var fields = new[] { "Background", "Overlay", "BackSurface" }.Select(name => typeof(WidgetContainer).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)).ToArray();
+        var graphicsField = typeof(WidgetContainer).GetField("BacksurfaceGraphic", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (!premultiplied)
+        {
+            ((Graphics)graphicsField.GetValue(container)).Dispose();
+            foreach (var field in fields)
+            {
+                var old = (Bitmap)field.GetValue(container);
+                var replacement = new Bitmap(old.Width, old.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using (var graphics = Graphics.FromImage(replacement)) graphics.DrawImageUnscaled(old, 0, 0);
+                field.SetValue(container, replacement); old.Dispose();
+            }
+            graphicsField.SetValue(container, Graphics.FromImage((Bitmap)fields[2].GetValue(container)));
+        }
+        else foreach (var field in fields)
+            Check(((Bitmap)field.GetValue(container)).PixelFormat == System.Drawing.Imaging.PixelFormat.Format32bppPArgb, "A compositing layer still requires conversion.");
+        container.Add(new AlphaWidget(), Point.Empty); container.Brightness = brightness; container.Update();
+        var output = new Bitmap(192, 128);
+        using (var graphics = Graphics.FromImage(output)) container.Draw(graphics);
+        ((Graphics)graphicsField.GetValue(container)).Dispose();
+        foreach (var field in fields) ((Bitmap)field.GetValue(container)).Dispose();
+        return output;
+    }
+    sealed class AlphaWidget : OwnerDrawWidget
+    {
+        public AlphaWidget() : base(WidgetScaleMode.Fixed, 192, 128) { }
+        public override void Draw(Graphics graphics)
+        {
+            graphics.Clear(Color.Transparent);
+            using (var brush = new SolidBrush(Color.FromArgb(77, 210, 73, 31))) graphics.FillRectangle(brush, 5, 5, 150, 60);
+            using (var brush = new SolidBrush(Color.FromArgb(160, 23, 190, 240))) graphics.FillEllipse(brush, 30, 20, 100, 80);
+            graphics.DrawString("Alpha / 半透明", SystemFonts.DefaultFont, Brushes.White, 5, 105);
+        }
     }
     static void Preview(Form form, string name)
     {
