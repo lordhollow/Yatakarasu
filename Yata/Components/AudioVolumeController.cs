@@ -42,6 +42,7 @@ namespace Yata.Components
         /// マイク
         /// </summary>
         IAudioEndpointVolume captureEndpoint = null;
+        bool disposed;
 
         /// <summary>
         /// 初期化
@@ -56,9 +57,23 @@ namespace Yata.Components
 
         public void Dispose()
         {
-            if (deviceEnumerator != null) Marshal.ReleaseComObject(deviceEnumerator);
-            if (renderEndpoint != null) Marshal.ReleaseComObject(renderEndpoint);
-            if (captureEndpoint != null) Marshal.ReleaseComObject(captureEndpoint);
+            IMMDeviceEnumerator enumerator;
+            IAudioEndpointVolume render, capture;
+            lock (lockObject)
+            {
+                if (disposed) return;
+                disposed = true;
+                enumerator = deviceEnumerator; render = renderEndpoint; capture = captureEndpoint;
+                deviceEnumerator = null; renderEndpoint = null; captureEndpoint = null;
+            }
+            // Unregister outside the gate: an in-flight notification may need the gate to finish.
+            try { enumerator?.UnregisterEndpointNotificationCallback(this); }
+            finally
+            {
+                if (render != null) Marshal.ReleaseComObject(render);
+                if (capture != null) Marshal.ReleaseComObject(capture);
+                if (enumerator != null) Marshal.ReleaseComObject(enumerator);
+            }
         }
 
         /// <summary>
@@ -113,8 +128,8 @@ namespace Yata.Components
         /// </summary>
         public float CaptureVolume
         {
-            get => GetVolume(captureEndpoint);
-            set => SetVolume(captureEndpoint, value);
+            get { lock (lockObject) { return GetVolume(captureEndpoint); } }
+            set { lock (lockObject) { SetVolume(captureEndpoint, value); } }
         }
         
         /// <summary>
@@ -177,6 +192,7 @@ namespace Yata.Components
         {
             lock (lockObject)
             {
+                if (disposed) return;
                 if (renderEndpoint != null) Marshal.ReleaseComObject(renderEndpoint);
                 if (captureEndpoint != null) Marshal.ReleaseComObject(captureEndpoint);
 

@@ -44,6 +44,7 @@ static class ConfigurationRegression
             Run("Meter groups and plot series reorder with their full settings", SensorOrdering);
             Run("Low-value warning colors work in single, layered and selected views", MeterWarningColors);
             Run("Meter warning options persist through files, editors and reordering", MeterWarningSettings);
+            Run("Capture volume access and disposal share the endpoint gate", CaptureVolumeSynchronization);
             Run("Launcher preserves keys, comments, options and page positions", LauncherRoundTrip);
             Run("Launcher rejects duplicate and out-of-range positions", LauncherValidation);
             Run("Atomic saves keep a backup", Backups);
@@ -458,6 +459,28 @@ static class ConfigurationRegression
             Check(loaded.MeterDefines[1].Layers.Select(layer => layer.LowIsWarning).SequenceEqual(new[] { false, true, true }), "Parent edits or layer edits were lost on save/reload.");
             Preview(editor, "meter-warning-options.png");
         }
+    }
+    static void CaptureVolumeSynchronization()
+    {
+        var controller = (AudioVolumeController)System.Runtime.Serialization.FormatterServices.GetUninitializedObject(typeof(AudioVolumeController));
+        var gate = new object();
+        typeof(AudioVolumeController).GetField("lockObject", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(controller, gate);
+        foreach (var setter in new[] { false, true })
+        using (var entered = new System.Threading.ManualResetEventSlim())
+        {
+            System.Threading.Tasks.Task task;
+            System.Threading.Monitor.Enter(gate);
+            try
+            {
+                task = System.Threading.Tasks.Task.Run(() => { entered.Set(); if (setter) controller.CaptureVolume = 25; else Check(controller.CaptureVolume == -1, "Missing microphone did not return -1."); });
+                Check(entered.Wait(2000) && !task.Wait(100), "Microphone access bypassed endpoint replacement lock.");
+            }
+            finally { System.Threading.Monitor.Exit(gate); }
+            Check(task.Wait(2000), "Microphone operation did not resume after unlocking.");
+        }
+        controller.Dispose(); controller.Dispose();
+        controller.OnDefaultDeviceChanged(default(DataFlow), default(Role), null);
+        Check(controller.CaptureVolume == -1, "Disposed endpoint became available again.");
     }
     static void LauncherRoundTrip()
     {
