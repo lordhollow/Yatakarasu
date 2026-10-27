@@ -104,6 +104,9 @@
           "System.Security.AccessControl": "6.0.0",
           "System.Security.Principal.Windows": "5.0.0"
         }
+      },
+      "karasu": {
+        "type": "Project"
       }
     },
     ".NETFramework,Version=v4.7.2/win-x64": {
