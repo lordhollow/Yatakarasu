@@ -365,13 +365,7 @@ namespace Yata.Components.Widget
                     if (entry.Command == "internal::LauncherNextPage" || entry.Command == "internal::LauncherPreviousPage")
                     {
                         app.Image.Dispose();
-                        app.Image = new Bitmap(48, 48, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
-                        using (var graphics = Graphics.FromImage(app.Image))
-                        using (var font = new Font("Segoe UI", 26, FontStyle.Bold))
-                        {
-                            graphics.Clear(Color.FromArgb(35, 65, 100));
-                            graphics.DrawString(entry.Command.EndsWith("NextPage") ? "▼" : "▲", font, Brushes.White, 5, 0);
-                        }
+                        app.Image = IconLibrary.NavigationIcon(entry.Command.EndsWith("NextPage"));
                     }
                 }
                 loaded.Add(posToApplicationIndex(entry.Row, entry.Column), app);

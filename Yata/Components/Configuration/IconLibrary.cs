@@ -17,6 +17,48 @@ namespace Yata.Components.Configuration
 
     internal static class IconLibrary
     {
+        internal static Bitmap CenteredNavigationIcon(bool next)
+        {
+            var image = new Bitmap(48, 48, PixelFormat.Format32bppPArgb);
+            using (var graphics = Graphics.FromImage(image))
+            using (var font = new Font("Segoe UI", 26, FontStyle.Bold))
+            using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
+            {
+                graphics.Clear(Color.FromArgb(35, 65, 100));
+                graphics.DrawString(next ? "▼" : "▲", font, Brushes.White, new RectangleF(0, 0, 48, 48), format);
+            }
+            return image;
+        }
+        internal static Rectangle NavigationInkBounds(Bitmap image)
+        {
+            int left = image.Width, top = image.Height, right = -1, bottom = -1;
+            for (int y = 0; y < image.Height; y++)
+                for (int x = 0; x < image.Width; x++)
+                {
+                    var color = image.GetPixel(x, y);
+                    if (color.R <= 160 || color.G <= 160 || color.B <= 160) continue;
+                    left = Math.Min(left, x); top = Math.Min(top, y); right = Math.Max(right, x); bottom = Math.Max(bottom, y);
+                }
+            return right < left ? Rectangle.Empty : Rectangle.FromLTRB(left, top, right + 1, bottom + 1);
+        }
+        internal static Bitmap NavigationIcon(bool next)
+        {
+            // Try layout centering first. Glyph bearings can still leave ▲ one pixel too low.
+            var centered = CenteredNavigationIcon(next);
+            var ink = NavigationInkBounds(centered);
+            if (ink.IsEmpty) return centered;
+            int x = (centered.Width - ink.Width) / 2 - ink.X;
+            int y = (centered.Height - ink.Height) / 2 - ink.Y;
+            if (x == 0 && y == 0) return centered;
+            var corrected = new Bitmap(48, 48, PixelFormat.Format32bppPArgb);
+            using (var graphics = Graphics.FromImage(corrected))
+            {
+                graphics.Clear(Color.FromArgb(35, 65, 100));
+                graphics.DrawImageUnscaled(centered, x, y);
+            }
+            centered.Dispose();
+            return corrected;
+        }
         [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         static extern uint ExtractIconEx(string file, int index, [Out] IntPtr[] large, [Out] IntPtr[] small, uint count);
         [DllImport("user32.dll")]

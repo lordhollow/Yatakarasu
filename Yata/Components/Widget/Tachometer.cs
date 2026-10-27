@@ -21,6 +21,7 @@ namespace Yata.Components.Widget
         readonly float[] fractions;
         readonly bool[] available;
         readonly RectangleF[] rings;
+        readonly System.Drawing.Drawing2D.GraphicsPath[] outlines;
         readonly Pen[,] pens;
         readonly Font font;
         readonly bool captionOnly;
@@ -42,7 +43,8 @@ namespace Yata.Components.Widget
             if (layers.Length == 0 || layers.Any(layer => layer.Sensor == null || !Finite(layer.Min) || !Finite(layer.Max) || layer.Min >= layer.Max))
                 throw new ArgumentException("Each meter layer needs a sensor and a finite increasing range.");
             fractions = new float[layers.Length]; available = new bool[layers.Length];
-            rings = new RectangleF[layers.Length]; pens = new Pen[layers.Length, 4];
+            rings = new RectangleF[layers.Length]; pens = new Pen[layers.Length, 3];
+            outlines = new System.Drawing.Drawing2D.GraphicsPath[layers.Length];
             font = new Font("BIZ UDPゴシック", 7.5f);
             // Cache GDI resources and geometry; repeated redraws do not allocate pens/paths.
             var band = 30f / layers.Length;
@@ -52,8 +54,16 @@ namespace Yata.Components.Widget
                 fractions[i] = 1f;
                 var radius = 34f - (i + 0.5f) * band;
                 rings[i] = new RectangleF(36 - radius, 36 - radius, radius * 2, radius * 2);
-                var colors = new[] { Color.DarkSlateBlue, Color.DarkOrange, Color.Red, Color.FromArgb(65, 65, 65) };
+                var colors = new[] { Color.DarkSlateBlue, Color.DarkOrange, Color.Red };
                 for (int c = 0; c < colors.Length; c++) pens[i, c] = new Pen(colors[c], band - gap);
+                var half = (band - gap) / 2;
+                var outer = new RectangleF(rings[i].X - half, rings[i].Y - half, rings[i].Width + 2 * half, rings[i].Height + 2 * half);
+                var inner = new RectangleF(rings[i].X + half, rings[i].Y + half, rings[i].Width - 2 * half, rings[i].Height - 2 * half);
+                var outline = new System.Drawing.Drawing2D.GraphicsPath();
+                outline.AddArc(outer, -90, 270);
+                outline.AddArc(inner, 180, -270);
+                outline.CloseFigure();
+                outlines[i] = outline;
             }
         }
         public string Unit { get; set; }
@@ -71,6 +81,7 @@ namespace Yata.Components.Widget
         {
             font.Dispose();
             foreach (var pen in pens) pen.Dispose();
+            foreach (var outline in outlines) outline.Dispose();
         }
         static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
         public override bool Update()
@@ -119,8 +130,8 @@ namespace Yata.Components.Widget
                 }
                 else
                 {
-                    graphics.DrawArc(pens[i, 3], rings[i], -90, 270);
                     if (sweep > 0) graphics.DrawArc(pens[i, color], rings[i], -90, sweep);
+                    graphics.DrawPath(Pens.Gray, outlines[i]);
                 }
             }
             if (displayText == null) displayText = SingleLayer >= 0 ? $"{LayerName(SingleLayer)}\r\n----\r\n{layers[SingleLayer].Unit ?? Unit}" : AllLayersName + "\r\n----";

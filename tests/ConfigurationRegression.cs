@@ -46,6 +46,7 @@ static class ConfigurationRegression
             Run("Meter warning options persist through files, editors and reordering", MeterWarningSettings);
             Run("Capture volume access and disposal share the endpoint gate", CaptureVolumeSynchronization);
             Run("Clicks redraw only the affected cached widget immediately", ImmediateClickDrawing);
+            Run("Navigation glyph ink is centered after layout alignment", NavigationIconCentering);
             Run("Launcher acknowledgements match requests and prevent server replay", LauncherAcknowledgements);
             Run("Rapid launch clicks are suppressed while pending and until quiet", LauncherClickSuppression);
             Run("Launcher indicators wait for actual results and report failures", LauncherResultFeedback);
@@ -167,7 +168,7 @@ static class ConfigurationRegression
                 Check(meter.Update() && meter.DisplayText == "Outer", "Healthy multilayer meter displayed numbers/units.");
                 meter.Draw(graphics);
                 Check(image.GetPixel(63, 36).ToArgb() == Color.DarkSlateBlue.ToArgb(), "First item is not the outer ring.");
-                Check(image.GetPixel(48, 36).ToArgb() == Color.FromArgb(65, 65, 65).ToArgb(), "Inner range was normalized with the outer range.");
+                Check(image.GetPixel(48, 36).A == 0, "Inner range was normalized with the outer range or the background is not transparent.");
                 Check(!meter.Update(), "Unchanged layers trigger redraws.");
                 inner.Value = null; Check(meter.Update(), "Missing layer did not invalidate drawing."); meter.Draw(graphics);
                 Check(meter.DisplayText == "Outer\r\n----" && image.GetPixel(48, 36).ToArgb() == Color.Red.ToArgb(), "Missing layer is not full red with ----.");
@@ -178,7 +179,7 @@ static class ConfigurationRegression
                 outer.Value = float.NaN; meter.Update(); meter.Draw(graphics);
                 Check(image.GetPixel(63, 36).ToArgb() == Color.Red.ToArgb(), "Non-finite samples were not treated as missing.");
                 outer.Value = 500; inner.Value = -500; meter.Update(); meter.Draw(graphics);
-                Check(image.GetPixel(48, 36).ToArgb() == Color.FromArgb(65, 65, 65).ToArgb(), "Out-of-range values were not clamped.");
+                Check(image.GetPixel(48, 36).A == 0, "Out-of-range values were not clamped.");
             }
             outer.Value = null;
             using (var single = new Tachometer(0, 100, outer) { Caption = "Single", Unit = "%" })
@@ -620,6 +621,20 @@ static class ConfigurationRegression
             Check(image.GetPixel(10, 8).G > image.GetPixel(10, 8).R, "Acknowledged success did not become green.");
             launcher.Click(120, 40); launcher.Update(); launcher.Draw(graphics);
             Check(failures.Single().Contains("Injected failure") && image.GetPixel(90, 8).R > image.GetPixel(90, 8).G, "Failure was not red or its reason was hidden.");
+        }
+    }
+    static void NavigationIconCentering()
+    {
+        foreach (var next in new[] { false, true })
+        using (var centered = IconLibrary.CenteredNavigationIcon(next))
+        using (var icon = IconLibrary.NavigationIcon(next))
+        {
+            var before = IconLibrary.NavigationInkBounds(centered); var after = IconLibrary.NavigationInkBounds(icon);
+            Console.WriteLine("CENTERING: " + (next ? "next" : "previous") + " " + before + " -> " + after);
+            Check(!after.IsEmpty && Math.Abs((after.Left + after.Right - 1) / 2f - 23.5f) <= 0.5f && Math.Abs((after.Top + after.Bottom - 1) / 2f - 23.5f) <= 0.5f, "Navigation glyph bounding box is not centered.");
+            Check(before.Size == after.Size, "Centering cropped or rescaled the triangle.");
+            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "previews", next ? "navigation-next.png" : "navigation-previous.png");
+            Directory.CreateDirectory(Path.GetDirectoryName(path)); icon.Save(path); images.Add(path);
         }
     }
     static void LauncherRoundTrip()
