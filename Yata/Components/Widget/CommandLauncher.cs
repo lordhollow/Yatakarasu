@@ -335,7 +335,7 @@ namespace Yata.Components.Widget
                         using (var font = new Font("Segoe UI", 26, FontStyle.Bold))
                         {
                             graphics.Clear(Color.FromArgb(35, 65, 100));
-                            graphics.DrawString(entry.Command.EndsWith("NextPage") ? ">" : "<", font, Brushes.White, 5, 0);
+                            graphics.DrawString(entry.Command.EndsWith("NextPage") ? "▼" : "▲", font, Brushes.White, 5, 0);
                         }
                     }
                 }
