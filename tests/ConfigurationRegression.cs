@@ -644,7 +644,7 @@ static class ConfigurationRegression
             launcher[0, 1] = new LauncherApplication { Caption = "Failed", Command = "key", Column = 1, DefinitionPath = first.DefinitionPath };
             var failures = new List<string>(); launcher.ExecutionFailed += failures.Add;
             launcher.Click(40, 40); launcher.Update(); launcher.Draw(graphics);
-            var waiting = image.GetPixel(10, 8); Check(waiting.R > 100 && waiting.G > 100 && waiting.B < 20, "Pending launch was not yellow.");
+            var waiting = image.GetPixel(10, 8); Check(waiting.R == 0 && waiting.G > 0 && waiting.G <= Color.DarkGreen.G && waiting.B == 0, "Pending launch was not dark green.");
             launcher.Click(40, 40); launcher.Update(); Check(requests == 1, "Repeated indicator click resubmitted the launch.");
             pending.SetResult(new LaunchResult("ok", "started"));
             var completion = (System.Threading.Tasks.Task<LaunchResult>)typeof(CommandLauncher).GetField("lastCompletion", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(launcher);

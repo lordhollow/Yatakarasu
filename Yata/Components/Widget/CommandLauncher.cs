@@ -186,7 +186,7 @@ namespace Yata.Components.Widget
 
                     if ((indicationLast > 0) && (r + LineOffset == lastClickAppY) && (c == lastClickAppX))
                     {
-                        var indicatorColor = lastClickPending ? Color.Gold : lastClickSuppressed ? Color.Silver : lastClickState ? Color.Lime : Color.Red;
+                        var indicatorColor = lastClickPending ? Color.DarkGreen : lastClickSuppressed ? Color.Silver : lastClickState ? Color.Lime : Color.Red;
                         using (var b = new SolidBrush(Color.FromArgb(255 / indicationTime * indicationLast, indicatorColor)))
                         {
                             graphics.FillRectangle(b, baseX + Parameter.HPadding - Parameter.IndicatorWidth, baseY + Parameter.VPadding - Parameter.IndicatorWidth,
