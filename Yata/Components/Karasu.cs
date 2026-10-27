@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices;
 
 namespace Yata.Components
 {
@@ -11,9 +12,10 @@ namespace Yata.Components
     {
         internal string Status { get; }
         internal string Message { get; }
+        internal int ProcessId { get; }
         internal bool Success => Status == "ok";
         internal bool Suppressed => Status == "blocked";
-        internal LaunchResult(string status, string message) { Status = status; Message = message; }
+        internal LaunchResult(string status, string message, int processId = 0) { Status = status; Message = message; ProcessId = processId; }
     }
 
     class Karasu : IUpdatable
@@ -26,6 +28,13 @@ namespace Yata.Components
         readonly int port;
         readonly Func<string, Task<LaunchResult>> transport;
         int cnt = 9999;
+        [DllImport("user32.dll")]
+        static extern bool AllowSetForegroundWindow(int processId);
+        [DllImport("user32.dll")]
+        static extern IntPtr GetForegroundWindow();
+        internal Func<int, bool> GrantForeground = AllowSetForegroundWindow;
+        internal Func<IntPtr> ForegroundWindow = GetForegroundWindow;
+        internal static bool LaunchesApplication(string command) => command.StartsWith("EXEC\t", StringComparison.Ordinal) || command.StartsWith("EXEC2\t", StringComparison.Ordinal) || command.StartsWith("COMMAND\t", StringComparison.Ordinal);
 
         public Karasu() : this(54892) { }
         internal Karasu(int port, Func<string, Task<LaunchResult>> transport = null) { this.port = port; this.transport = transport; }
@@ -38,22 +47,35 @@ namespace Yata.Components
         }
         internal async Task<LaunchResult> RequestAsync(string command)
         {
+            var origin = transport == null && LaunchesApplication(command) ? ForegroundWindow() : IntPtr.Zero;
             if (!await sendLock.WaitAsync(5000).ConfigureAwait(false)) return new LaunchResult("error", "Karasuへの送信待ちがタイムアウトしました。");
             try
             {
                 if (transport != null) return await transport(command).ConfigureAwait(false);
-                return await Task.Run(() => Exchange(command)).ConfigureAwait(false);
+                return await Task.Run(() =>
+                {
+                    if (LaunchesApplication(command))
+                    {
+                        // Resolve the live listener's PID for this launch, including after a restart.
+                        // A heartbeat cannot launch an app, so a failed probe is safe to report.
+                        var ready = Exchange("HEARTBEAT");
+                        if (!ready.Success) return ready;
+                        if (ready.ProcessId > 0) GrantForeground(ready.ProcessId);
+                    }
+                    return Exchange(command, origin);
+                }).ConfigureAwait(false);
             }
             catch (Exception ex) { Active = false; return new LaunchResult("error", ex.GetBaseException().Message); }
             finally { sendLock.Release(); }
         }
-        LaunchResult Exchange(string command)
+        LaunchResult Exchange(string command, IntPtr origin = default(IntPtr))
         {
             bool attempted = false;
             try
             {
                 var id = Guid.NewGuid().ToString("N");
-                var request = Encoding.UTF8.GetBytes("REQ3\t" + id + "\t" + Convert.ToBase64String(Encoding.UTF8.GetBytes(command)));
+                var request = Encoding.UTF8.GetBytes("REQ3\t" + id + "\t" + Convert.ToBase64String(Encoding.UTF8.GetBytes(command)) +
+                    (LaunchesApplication(command) ? "\t" + origin.ToInt64().ToString(System.Globalization.CultureInfo.InvariantCulture) : ""));
                 if (request.Length > 65536) return new LaunchResult("error", "実行要求が長すぎます。");
                 using (var client = new TcpClient())
                 {
@@ -94,9 +116,11 @@ namespace Yata.Components
         internal static LaunchResult ParseResponse(string response, string id)
         {
             var parts = response.Split('\t');
-            if (parts.Length != 4 || parts[0] != "RESULT" || parts[1] != id || (parts[2] != "ok" && parts[2] != "error" && parts[2] != "blocked"))
+            if ((parts.Length != 4 && parts.Length != 5) || parts[0] != "RESULT" || parts[1] != id || (parts[2] != "ok" && parts[2] != "error" && parts[2] != "blocked"))
                 throw new InvalidDataException("Karasuの応答を照合できません。");
-            return new LaunchResult(parts[2], new UTF8Encoding(false, true).GetString(Convert.FromBase64String(parts[3])));
+            int processId = 0;
+            if (parts.Length == 5 && (!int.TryParse(parts[4], out processId) || processId <= 0)) throw new InvalidDataException("KarasuのプロセスIDが不正です。");
+            return new LaunchResult(parts[2], new UTF8Encoding(false, true).GetString(Convert.FromBase64String(parts[3])), processId);
         }
     }
 }

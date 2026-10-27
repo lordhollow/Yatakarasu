@@ -49,6 +49,7 @@ static class ConfigurationRegression
             Run("Clicks redraw only the affected cached widget immediately", ImmediateClickDrawing);
             Run("Navigation glyph ink is centered after layout alignment", NavigationIconCentering);
             Run("Launcher acknowledgements match requests and prevent server replay", LauncherAcknowledgements);
+            Run("Launch activation waits for a window and respects later focus changes", LauncherForeground);
             Run("Rapid launch clicks are suppressed while pending and until quiet", LauncherClickSuppression);
             Run("Launcher indicators wait for actual results and report failures", LauncherResultFeedback);
             Run("Launcher preserves keys, comments, options and page positions", LauncherRoundTrip);
@@ -554,6 +555,7 @@ static class ConfigurationRegression
         var flags = BindingFlags.Static | BindingFlags.NonPublic;
         var startField = server.GetField("startProcess", flags); var clockField = server.GetField("requestClock", flags);
         var originalStart = startField.GetValue(null); var originalClock = clockField.GetValue(null);
+        var originalDirectory = Environment.CurrentDirectory; Environment.CurrentDirectory = root;
         long now = 10000; int starts = 0; bool fail = false;
         startField.SetValue(null, (Action<ProcessStartInfo>)(info => { starts++; if (fail) throw new System.ComponentModel.Win32Exception("Injected start failure"); }));
         clockField.SetValue(null, (Func<long>)(() => now));
@@ -580,18 +582,32 @@ static class ConfigurationRegression
                 int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
                 var peer = System.Threading.Tasks.Task.Run(() =>
                 {
+                    using (var probe = listener.AcceptTcpClient())
+                    {
+                        var stream = probe.GetStream(); var request = (string)Karasu("ReadCommand", stream);
+                        var bytes = Encoding.UTF8.GetBytes((string)Karasu("HandleRequest", request)); stream.Write(bytes, 0, bytes.Length);
+                    }
                     using (var socket = listener.AcceptTcpClient())
                     {
                         var stream = socket.GetStream(); var request = (string)Karasu("ReadCommand", stream);
+                        Check(request.Split('\t').Last() == "42", "Launch did not preserve the foreground window from the click.");
                         var bytes = Encoding.UTF8.GetBytes((string)Karasu("HandleRequest", request));
                         foreach (var value in bytes) stream.WriteByte(value);
                     }
                 });
                 var client = new Yata.Components.Karasu(port);
+                client.ForegroundWindow = () => new IntPtr(42);
+                int granted = 0;
+                client.GrantForeground = pid => { Check(pid == Process.GetCurrentProcess().Id, "Permission was granted to a process other than the responding server."); granted++; return true; };
                 var response = client.RequestAsync(command).GetAwaiter().GetResult();
-                Check(peer.Wait(6000) && response.Success && client.Active && starts == 4, "Real loopback ACK/half-close/fragmented reply failed: " + response.Status + "; " + response.Message + "; starts=" + starts + "; active=" + client.Active);
+                Check(peer.Wait(6000) && response.Success && client.Active && starts == 4 && granted == 1, "Real loopback ACK/half-close/fragmented reply failed: " + response.Status + "; " + response.Message + "; starts=" + starts + "; active=" + client.Active);
                 var noReply = System.Threading.Tasks.Task.Run(() =>
                 {
+                    using (var probe = listener.AcceptTcpClient())
+                    {
+                        var stream = probe.GetStream(); var request = (string)Karasu("ReadCommand", stream);
+                        var bytes = Encoding.UTF8.GetBytes((string)Karasu("HandleRequest", request)); stream.Write(bytes, 0, bytes.Length);
+                    }
                     using (var socket = listener.AcceptTcpClient()) Karasu("ReadCommand", socket.GetStream());
                 });
                 response = client.RequestAsync(command).GetAwaiter().GetResult();
@@ -607,7 +623,32 @@ static class ConfigurationRegression
                 Check(oversized, "Oversized response was accepted.");
             }
         }
-        finally { startField.SetValue(null, originalStart); clockField.SetValue(null, originalClock); }
+        finally { startField.SetValue(null, originalStart); clockField.SetValue(null, originalClock); Environment.CurrentDirectory = originalDirectory; }
+    }
+    static void LauncherForeground()
+    {
+        var type = Assembly.LoadFrom(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Karasu.exe")).GetType("Karasu.ForegroundLaunch");
+        var method = type.GetMethod("WaitForWindow", BindingFlags.Static | BindingFlags.NonPublic);
+        int polls = 0, waits = 0, activations = 0;
+        var handle = new IntPtr(123);
+        Func<Func<IntPtr>, Func<bool>, bool> run = (find, wanted) => (bool)method.Invoke(null, new object[] {
+            find, wanted, (Action<IntPtr>)(window => { Check(window == handle, "Activated the wrong window."); activations++; }), (Action)(() => waits++) });
+        Check(run(() => ++polls < 4 ? IntPtr.Zero : handle, () => true) && waits == 3 && activations == 1, "Delayed GUI was not activated exactly once.");
+        polls = waits = activations = 0;
+        Check(!run(() => { polls++; return IntPtr.Zero; }, () => polls < 2) && activations == 0, "Later user focus/newer launch did not cancel activation.");
+        polls = waits = activations = 0;
+        Check(!run(() => { polls++; return IntPtr.Zero; }, () => true) && polls == 100 && waits == 100 && activations == 0, "Non-GUI activation did not time out.");
+        bool wantedNow = true;
+        Check(!run(() => { wantedNow = false; return handle; }, () => wantedNow) && activations == 0, "A focus change while finding the window was ignored.");
+        foreach (var command in new[] { "EXEC\tkey\tapp\t", "EXEC2\tkey\t0\t0\tfile", "COMMAND\tKarasProcessStart" })
+            Check(Yata.Components.Karasu.LaunchesApplication(command), "External launch did not request foreground permission.");
+        foreach (var command in new[] { "HEARTBEAT", "EXIT", "internal::SetDisplayTopology", "internal::SetDisplayInput", "internal::LauncherNextPage" })
+            Check(!Yata.Components.Karasu.LaunchesApplication(command), "System operation incorrectly requested launch activation.");
+        var legacy = Yata.Components.Karasu.ParseResponse("RESULT\tid\tok\t", "id");
+        Check(legacy.Success && legacy.ProcessId == 0, "Legacy ACK compatibility was lost.");
+        bool rejected = false;
+        try { Yata.Components.Karasu.ParseResponse("RESULT\tid\tok\t\t0", "id"); } catch (InvalidDataException) { rejected = true; }
+        Check(rejected, "Invalid peer PID was accepted.");
     }
     static void LauncherClickSuppression()
     {

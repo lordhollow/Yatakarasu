@@ -114,14 +114,19 @@ namespace Karasu
         static readonly Dictionary<string, long> recentCommands = new Dictionary<string, long>();
         static readonly Stopwatch requestWatch = Stopwatch.StartNew();
         static Func<long> requestClock = () => requestWatch.ElapsedMilliseconds;
-        static Action<ProcessStartInfo> startProcess = info => { using (var process = Process.Start(info)) { } };
+        static IntPtr launchOrigin;
+        static Action<ProcessStartInfo> startProcess = info => ForegroundLaunch.Start(info, launchOrigin);
+        static readonly int processId = Process.GetCurrentProcess().Id;
 
         // The response is cached before writing to the socket. Replaying an ID cannot relaunch it.
         private static string HandleRequest(string request)
         {
             var parts = request.Split('\t');
             Guid id;
-            if (parts.Length != 3 || !Guid.TryParseExact(parts[1], "N", out id)) return Reply("-", "error", "要求の形式が不正です。");
+            long origin = 0;
+            if ((parts.Length != 3 && parts.Length != 4) || !Guid.TryParseExact(parts[1], "N", out id) ||
+                (parts.Length == 4 && !long.TryParse(parts[3], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out origin)))
+                return Reply("-", "error", "要求の形式が不正です。");
             lock (requestGate)
             {
                 Tuple<string, string> cached;
@@ -141,7 +146,9 @@ namespace Karasu
                     }
                     else
                     {
-                        DispatchCommand(command);
+                        launchOrigin = new IntPtr(origin);
+                        try { DispatchCommand(command); }
+                        finally { launchOrigin = IntPtr.Zero; }
                         if (launch)
                         {
                             if (recentCommands.Count >= 256) recentCommands.Remove(recentCommands.OrderBy(pair => pair.Value).First().Key);
@@ -157,7 +164,7 @@ namespace Karasu
             }
         }
         static string Reply(string id, string status, string message)
-            => "RESULT\t" + id + "\t" + status + "\t" + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(message.Length > 1024 ? message.Substring(0, 1024) : message));
+            => "RESULT\t" + id + "\t" + status + "\t" + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(message.Length > 1024 ? message.Substring(0, 1024) : message)) + "\t" + processId;
 
         private static string ReadCommand(System.IO.Stream stream)
         {
