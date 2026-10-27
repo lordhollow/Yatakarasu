@@ -27,8 +27,8 @@ namespace Yata.Components
             if (!File.Exists(filename)) return;
             var regPlot = new Regex(@"^Plot\t(?<name>.+?)\t(?<unit>.+?)\t(?<min>.+?)\t(?<max>.+?)\t(?<ll>.+?)\t(?<hl>.+)");
             var regPlotItem = new Regex(@"^\t(?<name>.+?)\t(?<id>[^\t]+)\t(?<r>\d+),(?<g>\d+),(?<b>\d+)(,(?<a>\d+))?");
-            var regMeter = new Regex(@"^Meter\t(?<name>.+?)\t(?<unit>.+?)\t(?<min>.+?)\t(?<max>.+?)\t(?<id>[^\t]+)");
-            var regLayer = new Regex(@"^MeterLayer\t(?<name>.+?)\t(?<unit>.+?)\t(?<min>.+?)\t(?<max>.+?)\t(?<id>[^\t]+)");
+            var regMeter = new Regex(@"^Meter\t(?<name>.+?)\t(?<unit>.+?)\t(?<min>.+?)\t(?<max>.+?)\t(?<id>[^\t]+)(?:\t(?<colorMode>[^\t]*))?$");
+            var regLayer = new Regex(@"^MeterLayer\t(?<name>.+?)\t(?<unit>.+?)\t(?<min>.+?)\t(?<max>.+?)\t(?<id>[^\t]+)(?:\t(?<colorMode>[^\t]*))?$");
             MeterDefine currentMeter = null;
 
             int lineNumber = 0;
@@ -108,7 +108,7 @@ namespace Yata.Components
                 foreach (var layer in meter.Layers)
                 {
                     ValidateRange(layer.Min, layer.Max);
-                    text.AppendLine(string.Join("\t", first ? "Meter" : "MeterLayer", Field(string.IsNullOrWhiteSpace(layer.Name) ? "未設定" : layer.Name), Field(string.IsNullOrEmpty(layer.Unit) ? " " : layer.Unit), Number(layer.Min), Number(layer.Max), Field(string.IsNullOrWhiteSpace(layer.Id) ? "-" : layer.Id)));
+                    text.AppendLine(string.Join("\t", first ? "Meter" : "MeterLayer", Field(string.IsNullOrWhiteSpace(layer.Name) ? "未設定" : layer.Name), Field(string.IsNullOrEmpty(layer.Unit) ? " " : layer.Unit), Number(layer.Min), Number(layer.Max), Field(string.IsNullOrWhiteSpace(layer.Id) ? "-" : layer.Id)) + (layer.LowIsWarning ? "\tlow-red" : ""));
                     first = false;
                 }
             }
@@ -200,6 +200,9 @@ namespace Yata.Components
             Min = float.Parse(m.Groups["min"].Value, CultureInfo.InvariantCulture);
             Max = float.Parse(m.Groups["max"].Value, CultureInfo.InvariantCulture);
             Id = m.Groups["id"].Value;
+            var colorMode = m.Groups["colorMode"].Value;
+            if (colorMode != "" && colorMode != "low-red" && colorMode != "high-red") throw new FormatException("タコメーターの色設定はlow-redまたはhigh-redを指定してください。");
+            LowIsWarning = colorMode == "low-red";
         }
         public string Name;
         public string Unit;
@@ -207,7 +210,8 @@ namespace Yata.Components
         public float Max;
         public string Id;
         public bool HasSensor => !string.IsNullOrWhiteSpace(Id) && Id.Trim() != "-";
-        public MeterItemDefine Clone() => new MeterItemDefine { Name = Name, Unit = Unit, Min = Min, Max = Max, Id = Id };
+        public bool LowIsWarning;
+        public MeterItemDefine Clone() => new MeterItemDefine { Name = Name, Unit = Unit, Min = Min, Max = Max, Id = Id, LowIsWarning = LowIsWarning };
     }
 
 }

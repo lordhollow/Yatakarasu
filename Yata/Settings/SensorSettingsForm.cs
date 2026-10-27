@@ -24,6 +24,7 @@ namespace Yata.Settings
             InitializeDefinition();
         }
         void SelectMeterButton_Click(object sender, EventArgs e) => SelectSensor(meters);
+        void Meters_CurrentCellDirtyStateChanged(object sender, EventArgs e) => EditorUi.CommitCheckBox(meters);
         void UpMeterButton_Click(object sender, EventArgs e) => MoveMeter(-1);
         void DownMeterButton_Click(object sender, EventArgs e) => MoveMeter(1);
         internal void MoveMeter(int delta)
@@ -49,7 +50,7 @@ namespace Yata.Settings
         }
         MeterDefine ReadMeter(DataGridViewRow row)
         {
-            var meter = new MeterDefine { Name = Cell(row, "Name"), Unit = Cell(row, "Unit"), Min = Parse(Cell(row, "Min")), Max = Parse(Cell(row, "Max")), Id = Cell(row, "Id") };
+            var meter = new MeterDefine { Name = Cell(row, "Name"), Unit = Cell(row, "Unit"), Min = Parse(Cell(row, "Min")), Max = Parse(Cell(row, "Max")), Id = Cell(row, "Id"), LowIsWarning = Convert.ToBoolean(DataCell(row, "LowIsWarning").Value) };
             meter.InnerLayers.AddRange(innerLayers[row.Index].Select(layer => layer.Clone()));
             return meter;
         }
@@ -59,6 +60,7 @@ namespace Yata.Settings
             var first = layers[0]; var row = meters.Rows[index];
             DataCell(row, "Name").Value = first.Name; DataCell(row, "Unit").Value = first.Unit;
             DataCell(row, "Min").Value = Number(first.Min); DataCell(row, "Max").Value = Number(first.Max); DataCell(row, "Id").Value = first.Id;
+            DataCell(row, "LowIsWarning").Value = first.LowIsWarning;
             innerLayers[index] = layers.Skip(1).Select(layer => layer.Clone()).ToList();
         }
         void ClearMeterButton_Click(object sender, EventArgs e)
@@ -78,6 +80,7 @@ namespace Yata.Settings
             metersMinColumn.DataPropertyName = "Min";
             metersMaxColumn.DataPropertyName = "Max";
             metersIdColumn.DataPropertyName = "Id";
+            metersLowIsWarningColumn.DataPropertyName = "LowIsWarning";
             var definition = new SensorDefine();
             definition.ReadFromFile(path, true);
             bool trimmed = definition.MeterDefines.Count > 6 || definition.PlotDefines.Count > 2;
@@ -86,7 +89,7 @@ namespace Yata.Settings
             innerLayers.Clear();
             foreach (var meter in definition.MeterDefines)
             {
-                meters.Rows.Add(meter.Name, meter.Unit, Number(meter.Min), Number(meter.Max), meter.Id);
+                meters.Rows.Add(meter.Name, meter.Unit, Number(meter.Min), Number(meter.Max), meter.Id, meter.LowIsWarning);
                 innerLayers.Add(meter.InnerLayers.Select(layer => layer.Clone()).ToList());
             }
             for (int i = 0; i < 2; i++) plots[i].LoadDefinition(definition.PlotDefines[i]);

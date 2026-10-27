@@ -13,8 +13,9 @@ namespace Yata.Components.Widget
             internal float Min, Max;
             internal ISensor Sensor;
             internal string Name, Unit;
-            internal Layer(float min, float max, ISensor sensor, string name = null, string unit = null)
-            { Min = min; Max = max; Sensor = sensor; Name = name; Unit = unit; }
+            internal bool LowIsWarning;
+            internal Layer(float min, float max, ISensor sensor, string name = null, string unit = null, bool lowIsWarning = false)
+            { Min = min; Max = max; Sensor = sensor; Name = name; Unit = unit; LowIsWarning = lowIsWarning; }
         }
         readonly Layer[] layers;
         readonly float[] fractions;
@@ -57,7 +58,7 @@ namespace Yata.Components.Widget
         }
         public string Unit { get; set; }
         internal static Tachometer FromDefinition(MeterDefine definition, Func<string, ISensor> resolve)
-            => new Tachometer(definition.DisplayLayers.Select(layer => new Layer(layer.Min, layer.Max, resolve(layer.Id), layer.Name, layer.Unit)), definition.IsCaptionOnly)
+            => new Tachometer(definition.DisplayLayers.Select(layer => new Layer(layer.Min, layer.Max, resolve(layer.Id), layer.Name, layer.Unit, layer.LowIsWarning)), definition.IsCaptionOnly)
             { Caption = definition.Name, Unit = definition.Unit };
         public override void Click(int x, int y)
         {
@@ -106,7 +107,10 @@ namespace Yata.Components.Widget
             {
                 if (SingleLayer >= 0 && i != SingleLayer) continue;
                 var sweep = fractions[i] * 270f;
-                var color = !available[i] ? 2 : sweep > 250 ? 2 : sweep > 180 ? 1 : 0;
+                var severity = (layers[i].LowIsWarning ? 1f - fractions[i] : fractions[i]) * 270f;
+                var color = !available[i] ? 2 : severity > 250 ? 2 : severity > 180 ? 1 : 0;
+                // At zero, retain a small warning mark so the empty arc cannot hide the warning.
+                if (available[i] && layers[i].LowIsWarning && sweep == 0) sweep = 6f;
                 if (SingleLayer >= 0)
                 {
                     var brush = color == 2 ? (available[i] ? Brushes.DarkRed : Brushes.Red) : color == 1 ? Brushes.DarkOrange : Brushes.DarkSlateBlue;

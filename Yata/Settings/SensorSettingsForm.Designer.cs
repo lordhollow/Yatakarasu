@@ -23,6 +23,7 @@
             this.metersMinColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.metersMaxColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.metersIdColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
+            this.metersLowIsWarningColumn = new System.Windows.Forms.DataGridViewCheckBoxColumn();
             this.selectMeterButton = new System.Windows.Forms.Button();
             this.clearMeterButton = new System.Windows.Forms.Button();
             this.layersButton = new System.Windows.Forms.Button();
@@ -63,11 +64,13 @@
             this.metersUnitColumn,
             this.metersMinColumn,
             this.metersMaxColumn,
-            this.metersIdColumn});
+            this.metersIdColumn,
+            this.metersLowIsWarningColumn});
             this.meters.Dock = System.Windows.Forms.DockStyle.Fill;
             this.meters.Location = new System.Drawing.Point(3, 49);
             this.meters.MultiSelect = false;
             this.meters.Name = "meters";
+            this.meters.CurrentCellDirtyStateChanged += new System.EventHandler(this.Meters_CurrentCellDirtyStateChanged);
             this.meters.RowHeadersVisible = false;
             this.meters.RowTemplate.Height = 27;
             this.meters.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
@@ -108,6 +111,10 @@
             this.metersIdColumn.HeaderText = "センサーID";
             this.metersIdColumn.Name = "metersIdColumn";
             this.metersIdColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            this.metersLowIsWarningColumn.Name = "metersLowIsWarningColumn";
+            this.metersLowIsWarningColumn.HeaderText = "少ない方を赤";
+            this.metersLowIsWarningColumn.FillWeight = 85F;
+            this.metersLowIsWarningColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
             // 
             // selectMeterButton
             // 
@@ -272,6 +279,7 @@
         private System.Windows.Forms.DataGridViewTextBoxColumn metersMinColumn;
         private System.Windows.Forms.DataGridViewTextBoxColumn metersMaxColumn;
         private System.Windows.Forms.DataGridViewTextBoxColumn metersIdColumn;
+        private System.Windows.Forms.DataGridViewCheckBoxColumn metersLowIsWarningColumn;
         private System.Windows.Forms.Button selectMeterButton;
         private System.Windows.Forms.Button clearMeterButton;
         private System.Windows.Forms.Button layersButton;

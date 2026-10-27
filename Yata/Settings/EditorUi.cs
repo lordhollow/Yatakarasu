@@ -6,6 +6,11 @@ namespace Yata.Settings
     internal static class EditorUi
     {
         public static void Error(IWin32Window owner, Exception ex) => MessageBox.Show(owner, ex.Message, "設定を確認してください", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        internal static void CommitCheckBox(DataGridView grid)
+        {
+            if (grid.IsCurrentCellDirty && grid.CurrentCell is DataGridViewCheckBoxCell)
+                grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+        }
         internal static bool MoveRow(DataGridView grid, int delta)
         {
             if (!grid.EndEdit() || grid.CurrentRow == null) return false;

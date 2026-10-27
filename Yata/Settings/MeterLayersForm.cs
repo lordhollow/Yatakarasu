@@ -20,8 +20,9 @@ namespace Yata.Settings
         {
             nameColumn.DataPropertyName = "Name"; unitColumn.DataPropertyName = "Unit";
             minColumn.DataPropertyName = "Min"; maxColumn.DataPropertyName = "Max"; idColumn.DataPropertyName = "Id";
+            lowIsWarningColumn.DataPropertyName = "LowIsWarning";
             grid.Rows.Clear();
-            foreach (var layer in layers) grid.Rows.Add(layer.Name, layer.Unit, Number(layer.Min), Number(layer.Max), layer.Id);
+            foreach (var layer in layers) grid.Rows.Add(layer.Name, layer.Unit, Number(layer.Min), Number(layer.Max), layer.Id, layer.LowIsWarning);
         }
         internal List<MeterItemDefine> ReadLayers()
         {
@@ -30,7 +31,7 @@ namespace Yata.Settings
             var result = new List<MeterItemDefine>();
             foreach (DataGridViewRow row in grid.Rows)
             {
-                var item = new MeterItemDefine { Name = Cell(row, "Name"), Unit = Cell(row, "Unit"), Min = Parse(Cell(row, "Min")), Max = Parse(Cell(row, "Max")), Id = Cell(row, "Id") };
+                var item = new MeterItemDefine { Name = Cell(row, "Name"), Unit = Cell(row, "Unit"), Min = Parse(Cell(row, "Min")), Max = Parse(Cell(row, "Max")), Id = Cell(row, "Id"), LowIsWarning = Convert.ToBoolean(DataCell(row, "LowIsWarning").Value) };
                 if (item.Min >= item.Max) throw new FormatException($"{row.Index + 1}行目: 最小値より大きい最大値を指定してください。");
                 result.Add(item);
             }
@@ -38,13 +39,14 @@ namespace Yata.Settings
         }
         void AddButton_Click(object sender, EventArgs e)
         {
-            var row = grid.Rows.Add("項目", " ", "0", "100", "-");
+            var row = grid.Rows.Add("項目", " ", "0", "100", "-", false);
             grid.CurrentCell = grid.Rows[row].Cells[0];
         }
         void RemoveButton_Click(object sender, EventArgs e)
         {
             if (grid.CurrentRow != null && grid.Rows.Count > 1) grid.Rows.Remove(grid.CurrentRow);
         }
+        void Grid_CurrentCellDirtyStateChanged(object sender, EventArgs e) => EditorUi.CommitCheckBox(grid);
         void UpButton_Click(object sender, EventArgs e) => MoveLayer(-1);
         void DownButton_Click(object sender, EventArgs e) => MoveLayer(1);
         internal void MoveLayer(int delta)

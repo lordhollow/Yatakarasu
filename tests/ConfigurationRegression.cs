@@ -42,6 +42,8 @@ static class ConfigurationRegression
             Run("Meter layer editor reorders, cancels and preserves all slots", MeterLayerEditing);
             Run("Unassigned meter parents provide captions without becoming layers", MeterCaptionParents);
             Run("Meter groups and plot series reorder with their full settings", SensorOrdering);
+            Run("Low-value warning colors work in single, layered and selected views", MeterWarningColors);
+            Run("Meter warning options persist through files, editors and reordering", MeterWarningSettings);
             Run("Launcher preserves keys, comments, options and page positions", LauncherRoundTrip);
             Run("Launcher rejects duplicate and out-of-range positions", LauncherValidation);
             Run("Atomic saves keep a backup", Backups);
@@ -374,6 +376,89 @@ static class ConfigurationRegression
         using (var editor = new MeterLayersForm())
             Check(editor.Controls.Find("saveButton", true).Single().Text == "決定", "Layer editor confirmation text regressed.");
     }
+    static void MeterWarningColors()
+    {
+        using (var usage = new CodexUsageMonitor(token => System.Threading.Tasks.Task.FromResult(CodexUsageSnapshot.Parse("{}")), () => DateTimeOffset.UtcNow))
+        {
+            var value = new ValueHistorySensor(new CodexUsageSensor(usage, false)) { Value = 5 };
+            var definition = new MeterDefine { Name = "GPT", Id = "/gpt", Unit = "%", LowIsWarning = true };
+            using (var meter = Tachometer.FromDefinition(definition, id => value))
+            using (var image = new Bitmap(72, 72))
+            using (var graphics = Graphics.FromImage(image))
+            {
+                meter.Update(); meter.Draw(graphics);
+                Check(image.GetPixel(38, 8).ToArgb() == Color.DarkRed.ToArgb() && meter.DisplayText == "GPT\r\n5.0\r\n%", "Low percentage is not red or the number was inverted.");
+                value.Value = 20; meter.Update(); meter.Draw(graphics);
+                Check(image.GetPixel(45, 15).ToArgb() == Color.DarkOrange.ToArgb(), "Low-mode intermediate range is not orange.");
+                value.Value = 80; meter.Update(); meter.Draw(graphics);
+                Check(image.GetPixel(60, 36).ToArgb() == Color.DarkSlateBlue.ToArgb(), "Healthy remaining capacity is not blue.");
+                value.Value = 100; meter.Update(); meter.Draw(graphics);
+                Check(image.GetPixel(60, 36).ToArgb() == Color.DarkSlateBlue.ToArgb(), "Full remaining capacity is marked red.");
+                value.Value = 0; meter.Update(); meter.Draw(graphics);
+                Check(image.GetPixel(37, 8).ToArgb() == Color.DarkRed.ToArgb() && meter.DisplayText.Contains("\r\n0.0\r\n"), "Zero lost its warning mark or actual value.");
+                value.Value = null; meter.Update(); meter.Draw(graphics);
+                Check(image.GetPixel(60, 36).ToArgb() == Color.Red.ToArgb() && meter.DisplayText.Contains("----"), "Missing low-mode readings did not remain full red.");
+            }
+            value.Value = 80;
+            using (var normal = new Tachometer(0, 100, value))
+            using (var image = new Bitmap(72, 72))
+            using (var graphics = Graphics.FromImage(image))
+            {
+                normal.Update(); normal.Draw(graphics);
+                Check(image.GetPixel(60, 36).ToArgb() == Color.DarkOrange.ToArgb(), "Default warning direction changed.");
+            }
+            var lowValue = new ValueHistorySensor(new CodexUsageSensor(usage, true)) { Value = 105 };
+            var group = new MeterDefine { Name = "Mixed", Id = "-" };
+            group.InnerLayers.Add(new MeterItemDefine { Name = "Low", Id = "/low", Min = 100, Max = 200, LowIsWarning = true, Unit = "%" });
+            group.InnerLayers.Add(new MeterItemDefine { Name = "High", Id = "/high", Unit = "%" });
+            using (var meter = Tachometer.FromDefinition(group, id => id == "/low" ? lowValue : value))
+            using (var image = new Bitmap(72, 72))
+            using (var graphics = Graphics.FromImage(image))
+            {
+                meter.Update(); meter.Draw(graphics);
+                Check(image.GetPixel(38, 9).ToArgb() == Color.Red.ToArgb() && image.GetPixel(48, 36).ToArgb() == Color.DarkOrange.ToArgb(), "Layers did not use independent warning directions/ranges.");
+                meter.Click(0, 0); meter.Update(); meter.Draw(graphics);
+                Check(image.GetPixel(38, 8).ToArgb() == Color.DarkRed.ToArgb() && meter.DisplayText == "Low\r\n105.0\r\n%", "Individual view lost its warning option.");
+                meter.Click(0, 0); meter.Update(); meter.Draw(graphics);
+                Check(image.GetPixel(60, 36).ToArgb() == Color.DarkOrange.ToArgb(), "Normal inner layer inherited low-mode coloring.");
+            }
+        }
+    }
+    static void MeterWarningSettings()
+    {
+        var definition = Sensors();
+        definition.MeterDefines[0].LowIsWarning = true;
+        definition.MeterDefines[0].InnerLayers.Add(new MeterItemDefine { Name = "Normal", Id = "/normal" });
+        definition.MeterDefines[0].InnerLayers.Add(new MeterItemDefine { Name = "Low", Id = "/low", LowIsWarning = true });
+        var path = Path.Combine(root, "warning-options.txt"); definition.Save(path);
+        var loaded = new SensorDefine(); loaded.ReadFromFile(path, true);
+        Check(loaded.MeterDefines[0].Layers.Select(layer => layer.LowIsWarning).SequenceEqual(new[] { true, false, true }), "Warning options were not persisted per layer.");
+        Check(loaded.MeterDefines[0].Clone().LowIsWarning && loaded.MeterDefines[0].InnerLayers[1].Clone().LowIsWarning, "Cloning dropped warning options.");
+        var legacy = new SensorDefine(); legacy.ReadFromFile(Path.Combine(root, "sensor.txt"), true);
+        Check(legacy.MeterDefines.SelectMany(meter => meter.Layers).All(layer => !layer.LowIsWarning), "Legacy file default direction changed.");
+        var invalid = Path.Combine(root, "bad-warning-option.txt"); File.WriteAllText(invalid, "Meter\tBad\t%\t0\t100\t/id\twrong-mode\n");
+        Reject(() => new SensorDefine().ReadFromFile(invalid, true));
+        using (var parent = new SensorSettingsForm(path, new List<SensorChoice>()))
+        using (var editor = new MeterLayersForm(loaded.MeterDefines[0].Layers, new List<SensorChoice>()))
+        {
+            var parentGrid = Find<DataGridView>(parent); var grid = Find<DataGridView>(editor);
+            Check(SensorSettingsForm.DataCell(parentGrid.Rows[0], "LowIsWarning") is DataGridViewCheckBoxCell && Convert.ToBoolean(SensorSettingsForm.DataCell(parentGrid.Rows[0], "LowIsWarning").Value), "Parent option is not an initialized checkbox.");
+            parentGrid.CurrentCell = parentGrid.Rows[0].Cells[0]; parent.MoveMeter(1);
+            var output = Path.Combine(root, "warning-ui.txt");
+            typeof(SensorSettingsForm).GetMethod("SaveDefinition", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(parent, new object[] { output });
+            Check(parent.ResultDefinition.MeterDefines[1].Layers.Select(layer => layer.LowIsWarning).SequenceEqual(new[] { true, false, true }), "Moving a group lost warning settings.");
+            SensorSettingsForm.DataCell(grid.Rows[1], "LowIsWarning").Value = true;
+            grid.CurrentCell = grid.Rows[1].Cells[0]; editor.MoveLayer(-1);
+            var items = editor.ReadLayers();
+            Check(items[0].Name == "Normal" && items[0].LowIsWarning, "Reordering a layer lost its checkbox value.");
+            parent.ApplyMeterLayers(1, items);
+            SensorSettingsForm.DataCell(parentGrid.Rows[1], "LowIsWarning").Value = false;
+            typeof(SensorSettingsForm).GetMethod("SaveDefinition", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(parent, new object[] { output });
+            loaded.ReadFromFile(output, true);
+            Check(loaded.MeterDefines[1].Layers.Select(layer => layer.LowIsWarning).SequenceEqual(new[] { false, true, true }), "Parent edits or layer edits were lost on save/reload.");
+            Preview(editor, "meter-warning-options.png");
+        }
+    }
     static void LauncherRoundTrip()
     {
         var path = Path.Combine(root, "karasu.exec.txt"); Launcher().Save(path);
@@ -538,7 +623,7 @@ static class ConfigurationRegression
                 if (control is SensorSettingsForm)
                 {
                     Check(Find<TabControl>(control).TabPages.Count == 3, "Sensor tabs require runtime setup.");
-                    Check(Find<DataGridView>(control).Columns.Count == 5, "Sensor columns require runtime setup.");
+                    Check(Find<DataGridView>(control).Columns.Count == 6, "Sensor columns require runtime setup.");
                 }
                 if (control is LauncherSettingsForm)
                     Check(Find<DataGridView>(control).Columns.Count == 6, "Launcher columns require runtime setup.");
@@ -636,7 +721,7 @@ static class ConfigurationRegression
             using (var runtime = new SensorSettingsForm(Path.Combine(root, "sensor.txt"), choices))
             {
                 var grid = Find<DataGridView>(runtime);
-                Check(grid.Rows.Count == 6 && grid.Columns.Cast<DataGridViewColumn>().Select(column => column.DataPropertyName).SequenceEqual(new[] { "Name", "Unit", "Min", "Max", "Id" }), "Runtime meter mapping was not restored.");
+                Check(grid.Rows.Count == 6 && grid.Columns.Cast<DataGridViewColumn>().Select(column => column.DataPropertyName).SequenceEqual(new[] { "Name", "Unit", "Min", "Max", "Id", "LowIsWarning" }), "Runtime meter mapping was not restored.");
             }
             plot.LoadDefinition(Sensors().PlotDefines[0]);
             Check(plot.Series.Columns.Cast<DataGridViewColumn>().Select(column => column.DataPropertyName).SequenceEqual(new[] { "Name", "Id", "Color" }), "Runtime plot mapping was not restored.");

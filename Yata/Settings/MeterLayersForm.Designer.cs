@@ -17,6 +17,7 @@ namespace Yata.Settings
             this.minColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.maxColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.idColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
+            this.lowIsWarningColumn = new System.Windows.Forms.DataGridViewCheckBoxColumn();
             this.commands = new System.Windows.Forms.FlowLayoutPanel();
             this.addButton = new System.Windows.Forms.Button();
             this.removeButton = new System.Windows.Forms.Button();
@@ -36,11 +37,12 @@ namespace Yata.Settings
             this.grid.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.Fill;
             this.grid.BackgroundColor = System.Drawing.Color.White;
             this.grid.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[] {
-                this.nameColumn, this.unitColumn, this.minColumn, this.maxColumn, this.idColumn});
+                this.nameColumn, this.unitColumn, this.minColumn, this.maxColumn, this.idColumn, this.lowIsWarningColumn});
             this.grid.Dock = System.Windows.Forms.DockStyle.Fill;
             this.grid.Location = new System.Drawing.Point(8, 82);
             this.grid.MultiSelect = false;
             this.grid.Name = "grid";
+            this.grid.CurrentCellDirtyStateChanged += new System.EventHandler(this.Grid_CurrentCellDirtyStateChanged);
             this.grid.RowHeadersVisible = false;
             this.grid.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
             this.grid.Size = new System.Drawing.Size(884, 360);
@@ -65,6 +67,10 @@ namespace Yata.Settings
             this.idColumn.HeaderText = "センサーID";
             this.idColumn.FillWeight = 240;
             this.idColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            this.lowIsWarningColumn.Name = "lowIsWarningColumn";
+            this.lowIsWarningColumn.HeaderText = "少ない方を赤";
+            this.lowIsWarningColumn.FillWeight = 85F;
+            this.lowIsWarningColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
             this.commands.AutoSize = true;
             this.commands.Controls.Add(this.addButton);
             this.commands.Controls.Add(this.removeButton);
@@ -156,6 +162,7 @@ namespace Yata.Settings
         private System.Windows.Forms.DataGridViewTextBoxColumn minColumn;
         private System.Windows.Forms.DataGridViewTextBoxColumn maxColumn;
         private System.Windows.Forms.DataGridViewTextBoxColumn idColumn;
+        private System.Windows.Forms.DataGridViewCheckBoxColumn lowIsWarningColumn;
         private System.Windows.Forms.FlowLayoutPanel commands;
         private System.Windows.Forms.FlowLayoutPanel footer;
         private System.Windows.Forms.Button addButton;
