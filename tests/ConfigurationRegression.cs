@@ -45,6 +45,7 @@ static class ConfigurationRegression
             Run("Low-value warning colors work in single, layered and selected views", MeterWarningColors);
             Run("Meter warning options persist through files, editors and reordering", MeterWarningSettings);
             Run("Capture volume access and disposal share the endpoint gate", CaptureVolumeSynchronization);
+            Run("Clicks redraw only the affected cached widget immediately", ImmediateClickDrawing);
             Run("Launcher preserves keys, comments, options and page positions", LauncherRoundTrip);
             Run("Launcher rejects duplicate and out-of-range positions", LauncherValidation);
             Run("Atomic saves keep a backup", Backups);
@@ -220,7 +221,7 @@ static class ConfigurationRegression
             {
                 var container = new WidgetContainer(); container.Add(meter, new Point(10, 10));
                 meter.Update(); Check(meter.VisibleLayer == -1 && meter.DisplayText == "CPU\r\n----", "Initial view is not all layers.");
-                container.Click(11, 11); Check(meter.Update(), "Click did not invalidate the cached drawing."); meter.Draw(graphics);
+                Check(container.Click(11, 11), "Click did not immediately update the cached drawing."); meter.Draw(graphics);
                 Check(meter.VisibleLayer == 0 && meter.DisplayText == "CPU\r\n50.0\r\n°C" && image.GetPixel(60, 36).ToArgb() == Color.DarkSlateBlue.ToArgb(), "First layer does not show its own label/value/unit at full size.");
                 second.Value = 200; Check(!meter.Update(), "A hidden layer caused an unnecessary redraw.");
                 second.Value = 150; Check(!meter.Update(), "A hidden layer caused an unnecessary redraw on recovery.");
@@ -481,6 +482,36 @@ static class ConfigurationRegression
         controller.Dispose(); controller.Dispose();
         controller.OnDefaultDeviceChanged(default(DataFlow), default(Role), null);
         Check(controller.CaptureVolume == -1, "Disposed endpoint became available again.");
+    }
+    static void ImmediateClickDrawing()
+    {
+        var container = new WidgetContainer(); container.Initialize(1280, 800);
+        var clicked = new ClickWidget(); var unrelated = new ClickWidget();
+        container.Add(clicked, new Point(10, 10)); container.Add(unrelated, new Point(100, 100));
+        container.Update();
+        int unrelatedUpdates = unrelated.Updates;
+        Check(container.Click(15, 15) && clicked.Updates == 2 && unrelated.Updates == unrelatedUpdates, "Click waited for the timer or updated unrelated widgets.");
+        using (var image = new Bitmap(1280, 800))
+        using (var graphics = Graphics.FromImage(image))
+        {
+            container.Draw(graphics); Check(image.GetPixel(15, 15).G > image.GetPixel(15, 15).R, "Click did not update the actual composition cache.");
+        }
+        Check(!container.Click(900, 700) && clicked.Updates == 2, "An outside click forced a refresh.");
+        clicked.OnClick = () => container.Remove(clicked);
+        Check(container.Click(15, 15), "Removing the clicked widget did not invalidate the screen.");
+        container.Remove(unrelated);
+        foreach (var field in new[] { "BacksurfaceGraphic", "Background", "Overlay", "BackSurface" })
+            ((IDisposable)typeof(WidgetContainer).GetField(field, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(container)).Dispose();
+    }
+    sealed class ClickWidget : OwnerDrawWidget
+    {
+        public int Updates;
+        bool clicked;
+        public Action OnClick;
+        public ClickWidget() : base(WidgetScaleMode.Fixed, 20, 20) { }
+        public override bool Update() { Updates++; return true; }
+        public override void Click(int x, int y) { clicked = true; OnClick?.Invoke(); }
+        public override void Draw(Graphics graphics) => graphics.Clear(clicked ? Color.Lime : Color.Red);
     }
     static void LauncherRoundTrip()
     {

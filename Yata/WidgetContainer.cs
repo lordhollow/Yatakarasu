@@ -132,20 +132,7 @@ namespace Yata
             {
                 if (holder.Counter <= 0)
                 {
-                    bool changed;
-                    using (PageFaultDiagnostics.Measure(holder.UpdateDiagnosticName)) changed = holder.Component.Update();
-                    if (changed)
-                    {
-                        var widget = holder.Component as IWidget;
-                        if (widget != null)
-                        {
-                            BacksurfaceGraphic.ResetTransform();
-                            BacksurfaceGraphic.TranslateTransform(holder.Position.X, holder.Position.Y);
-                            BacksurfaceGraphic.SetClip(new Rectangle(0, 0, widget.Width, widget.Height));
-                            using (PageFaultDiagnostics.Measure(holder.DrawDiagnosticName)) widget.Draw(BacksurfaceGraphic);
-                            ret = true;
-                        }
-                    }
+                    ret |= UpdateWidget(holder);
                     holder.Counter = holder.Component.UpdateRate;
                 }
                 holder.Counter--;
@@ -153,17 +140,40 @@ namespace Yata
             return ret;
         }
 
-        public void Click(int x, int y)
+        bool UpdateWidget(ComponentHolder holder)
         {
-            foreach (var holder in _Widgets.Where(item => item.Component is IWidget))
+            bool changed;
+            using (PageFaultDiagnostics.Measure(holder.UpdateDiagnosticName)) changed = holder.Component.Update();
+            if (!changed || !(holder.Component is IWidget widget)) return false;
+            if (BacksurfaceGraphic != null)
             {
-                var widget = holder.Component as IWidget;
-                var rect = new Rectangle(holder.Position, new Size(widget.Width, widget.Height));
-                if (rect.Contains(x, y))
-                {
-                    widget.Click(x - holder.Position.X, y - holder.Position.Y);
-                }
+                BacksurfaceGraphic.ResetTransform();
+                BacksurfaceGraphic.TranslateTransform(holder.Position.X, holder.Position.Y);
+                BacksurfaceGraphic.SetClip(new Rectangle(0, 0, widget.Width, widget.Height));
+                using (PageFaultDiagnostics.Measure(holder.DrawDiagnosticName)) widget.Draw(BacksurfaceGraphic);
             }
+            return true;
+        }
+
+        public bool Click(int x, int y)
+        {
+            var changed = false;
+            // A settings action can replace widgets while handling the click.
+            var targets = _Widgets.Where(holder => holder.Component is IWidget widget &&
+                new Rectangle(holder.Position, new Size(widget.Width, widget.Height)).Contains(x, y)).ToArray();
+            foreach (var holder in targets)
+            {
+                if (!_Widgets.Contains(holder)) continue;
+                ((IWidget)holder.Component).Click(x - holder.Position.X, y - holder.Position.Y);
+                if (_Widgets.Contains(holder)) changed |= UpdateWidget(holder);
+                else changed = true;
+            }
+            if (BrightnessChanged && Overlay != null)
+            {
+                using (var overlay = Graphics.FromImage(Overlay)) overlay.Clear(Color.FromArgb((int)(255 * (1 - Brightness)), Color.Black));
+                BrightnessChanged = false; changed = true;
+            }
+            return changed;
         }
 
         public void Draw(Graphics g)

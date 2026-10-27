@@ -219,7 +219,7 @@ namespace Yata
             if (clickButton != MouseButtons.Left) return;
             if ((ClickPos.X < container.Width) && (ClickPos.Y < container.Height))
             {
-                container.Click(ClickPos.X, ClickPos.Y);
+                if (container.Click(ClickPos.X, ClickPos.Y)) Invalidate();
             }
         }
 
