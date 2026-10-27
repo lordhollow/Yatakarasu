@@ -91,14 +91,17 @@ namespace Yata.Components
     internal sealed class CodexUsageSnapshot
     {
         readonly Dictionary<int, Window> windows = new Dictionary<int, Window>();
-        sealed class Window { internal float Remaining; internal DateTimeOffset? Reset; }
+        readonly DateTimeOffset observedAt;
+        CodexUsageSnapshot(DateTimeOffset observedAt) { this.observedAt = observedAt; }
+        sealed class Window { internal float Remaining; internal DateTimeOffset? Reset; internal bool ZeroUsage; }
         internal float? Remaining(int minutes, DateTimeOffset now)
         {
             Window window;
-            return windows.TryGetValue(minutes, out window) && (!window.Reset.HasValue || now < window.Reset)
+            return windows.TryGetValue(minutes, out window) && (!window.Reset.HasValue || now < window.Reset ||
+                (window.ZeroUsage && window.Reset <= observedAt))
                 ? window.Remaining : (float?)null;
         }
-        internal static CodexUsageSnapshot Parse(string json)
+        internal static CodexUsageSnapshot Parse(string json, DateTimeOffset? observedAt = null)
         {
             var root = new JavaScriptSerializer().DeserializeObject(json) as Dictionary<string, object>;
             if (root == null) throw new FormatException("Invalid rate limit response.");
@@ -106,7 +109,7 @@ namespace Yata.Components
             if (root.ContainsKey("rateLimitsByLimitId") && root["rateLimitsByLimitId"] != null)
                 bucket = Object(Object(root, "rateLimitsByLimitId"), "codex");
             if (bucket != null && bucket.ContainsKey("limitId") && bucket["limitId"] != null && !Equals(bucket["limitId"], "codex")) bucket = null;
-            var snapshot = new CodexUsageSnapshot();
+            var snapshot = new CodexUsageSnapshot(observedAt ?? DateTimeOffset.UtcNow);
             foreach (var key in new[] { "primary", "secondary" })
             {
                 var source = Object(bucket, key);
@@ -122,7 +125,9 @@ namespace Yata.Components
                     catch (OverflowException) { continue; }
                 }
                 // Durations identify windows; primary/secondary order is not a contract.
-                snapshot.windows[(int)minutes] = new Window { Remaining = (float)Math.Max(0, Math.Min(100, 100 - used)), Reset = resetAt };
+                // A newly observed zero-usage window can retain the previous reset time.
+                // Keep its explicit 100% reading; a cached window crossing a future reset still expires.
+                snapshot.windows[(int)minutes] = new Window { Remaining = (float)Math.Max(0, Math.Min(100, 100 - used)), Reset = resetAt, ZeroUsage = used == 0 };
             }
             return snapshot;
         }

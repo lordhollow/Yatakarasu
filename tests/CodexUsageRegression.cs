@@ -29,11 +29,12 @@ static class CodexUsageRegression
             }
             Run("Remaining percent, bucket preference and window duration", Parsing);
             Run("Missing, invalid and expired windows stay unavailable", Missing);
+            Run("Fresh idle windows retain 100 percent with a past reset timestamp", IdleWindows);
             Run("Polling is opt-in, shared, throttled and single-flight", Polling);
             Run("Failures, stale cache, cancellation and recovery", Recovery);
             Run("Account sensors use normal selection, history and aggregates", Integration);
             Run("JSONL handshake, notifications, errors and timeout", Protocol);
-            Console.WriteLine("All 6 Codex usage checks passed.");
+            Console.WriteLine("All 7 Codex usage checks passed.");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
@@ -57,8 +58,33 @@ static class CodexUsageRegression
             var missing = CodexUsageSnapshot.Parse(json);
             Check(!missing.Remaining(300, Start).HasValue && !missing.Remaining(10080, Start).HasValue, "Unknown data became a valid reading.");
         }
-        var expired = CodexUsageSnapshot.Parse("{\"rateLimits\":{\"primary\":{\"usedPercent\":0,\"windowDurationMins\":300,\"resetsAt\":1793000000}}}");
+        var expired = CodexUsageSnapshot.Parse("{\"rateLimits\":{\"primary\":{\"usedPercent\":0,\"windowDurationMins\":300,\"resetsAt\":1793000000}}}", Start.AddSeconds(-1));
         Check(expired.Remaining(300, Start.AddSeconds(-1)) == 100 && !expired.Remaining(300, Start).HasValue, "Reset must invalidate the old reading.");
+    }
+    static void IdleWindows()
+    {
+        var json = "{\"rateLimits\":{\"primary\":{\"usedPercent\":0,\"windowDurationMins\":300,\"resetsAt\":1793000000},\"secondary\":{\"usedPercent\":40,\"windowDurationMins\":10080}}}";
+        var fresh = CodexUsageSnapshot.Parse(json, Start);
+        Check(fresh.Remaining(300, Start) == 100 && fresh.Remaining(10080, Start) == 60, "Fresh zero usage was mistaken for missing data at reset.");
+        Check(CodexUsageSnapshot.Parse(json, Start.AddMinutes(1)).Remaining(300, Start.AddMinutes(1)) == 100, "Fresh idle reading with a past reset was rejected.");
+        Check(!CodexUsageSnapshot.Parse(json.Replace("\"usedPercent\":0", "\"usedPercent\":1"), Start.AddMinutes(1)).Remaining(300, Start.AddMinutes(1)).HasValue, "Expired nonzero usage was accepted.");
+        Check(!CodexUsageSnapshot.Parse(json.Replace("\"usedPercent\":0", "\"usedPercent\":null"), Start).Remaining(300, Start).HasValue, "Missing usage was fabricated as 100 percent.");
+        var now = Start;
+        using (var monitor = new CodexUsageMonitor(token => Task.FromResult(CodexUsageSnapshot.Parse(json, now)), () => now))
+        {
+            monitor.SetEnabled(true); monitor.RefreshIfDue().Wait();
+            var sensor = new CodexUsageSensor(monitor, false);
+            using (var meter = new Yata.Components.Widget.Tachometer(new[] { new Yata.Components.Widget.Tachometer.Layer(0, 100, sensor, "GPT(5h)", "%", true) }))
+            using (var image = new System.Drawing.Bitmap(72, 72))
+            using (var graphics = System.Drawing.Graphics.FromImage(image))
+            {
+                meter.Update(); meter.Draw(graphics);
+                Check(meter.DisplayText == "GPT(5h)\r\n100.0\r\n%" && image.GetPixel(60, 36).ToArgb() == System.Drawing.Color.DarkSlateBlue.ToArgb(), "Fresh 100 percent rendered as a missing red meter.");
+                now += CodexUsageMonitor.MaxAge + TimeSpan.FromSeconds(1);
+                meter.Update(); meter.Draw(graphics);
+                Check(!sensor.Value.HasValue && meter.DisplayText.Contains("----") && image.GetPixel(60, 36).ToArgb() == System.Drawing.Color.Red.ToArgb(), "Idle reading bypassed cache expiry.");
+            }
+        }
     }
     static void Polling()
     {
