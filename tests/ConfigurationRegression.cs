@@ -52,6 +52,8 @@ static class ConfigurationRegression
             Run("Launcher indicators wait for actual results and report failures", LauncherResultFeedback);
             Run("Launcher preserves keys, comments, options and page positions", LauncherRoundTrip);
             Run("Launcher rejects duplicate and out-of-range positions", LauncherValidation);
+            Run("Launcher layout moves and swaps across pages without writing files", LauncherLayoutEditing);
+            Run("Launcher drag events support page hover and reject foreign data", LauncherLayoutDragEvents);
             Run("Atomic saves keep a backup", Backups);
             Run("Selected configuration files persist with a safe fallback", SelectedFiles);
             Run("Pages wrap and reload clamps the current page", Pages);
@@ -651,6 +653,85 @@ static class ConfigurationRegression
         definition = Launcher(); definition.Entries[0].Column = 16; Reject(definition.Validate);
         definition = Launcher(); definition.Entries[0].Command = "evil\ncommand"; Reject(definition.Validate);
     }
+    static void LauncherLayoutEditing()
+    {
+        var path = Path.Combine(root, "karasu.exec.txt"); var before = File.ReadAllText(path);
+        using (var parent = new LauncherSettingsForm(path))
+        {
+            var bound = (System.ComponentModel.BindingList<LauncherEntry>)Find<DataGridView>(parent).DataSource;
+            var originals = bound.Select(entry => entry.Clone()).ToList();
+            using (var layout = new LauncherLayoutForm(bound))
+            {
+                Check(Find<DataGridView>(layout).Columns.Count == 16 && Find<DataGridView>(layout).Rows.Count == 2, "Layout is not a 16 by 2 grid.");
+                Check(layout.MoveEntry(0, 1, 0, 2), "Could not move to an empty slot.");
+                Check(layout.MoveEntry(0, 2, 0, 0), "Could not swap across pages.");
+                Check(!layout.MoveEntry(0, 2, 0, 0) && !layout.MoveEntry(0, 2, 2, 0) && !layout.MoveEntry(0, 2, 0, 16), "Invalid or unchanged destination was accepted.");
+                var edited = layout.ReadEntries();
+                var swapped = edited.Single(entry => entry.Command == "second.exe");
+                Check(edited[0].Row == 2 && edited[0].Column == 0 && swapped.Row == 0 && swapped.Column == 2, "Occupied slot was not swapped with the source.");
+                for (int i = 0; i < originals.Count; i++)
+                    Check(edited[i].Caption == originals[i].Caption && edited[i].Command == originals[i].Command && edited[i].Option == originals[i].Option && edited[i].IconPath == originals[i].IconPath, "Layout editing changed entry content.");
+                Check(bound[0].Row == originals[0].Row && bound[0].Column == originals[0].Column && File.ReadAllText(path) == before, "Uncommitted layout changed the parent or file.");
+                Check(layout.AddPage() && layout.CurrentPage == 3, "Could not add a layout page.");
+                edited = layout.ReadEntries();
+                Check(edited.Single(entry => entry.Row == 4 && entry.Column == 0).Command == "internal::LauncherPreviousPage" && edited.Single(entry => entry.Row == 5 && entry.Column == 0).Command == "internal::LauncherNextPage", "New page navigation is not at the left edge.");
+                Check(layout.MoveEntry(0, 3, 0, 1), "Could not move to the added page.");
+                parent.ApplyLayout(layout.ReadEntries());
+                Check(bound.Any(entry => entry.Command == "first.exe" && entry.Page == 3 && entry.Column == 1) && File.ReadAllText(path) == before, "Applying layout did not update only the editor list.");
+                var invalid = layout.ReadEntries(); invalid[1].Row = invalid[0].Row; invalid[1].Column = invalid[0].Column;
+                Reject(() => parent.ApplyLayout(invalid));
+                var output = Path.Combine(root, "layout-save-as.txt");
+                typeof(LauncherSettingsForm).GetMethod("SaveDefinition", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(parent, new object[] { output });
+                var saved = LauncherDefinition.Load(output);
+                Check(saved.Key == "test-key" && saved.Comments.Contains("# 保持するコメント") && saved.Entries.Any(entry => entry.Command == "first.exe" && entry.Page == 3 && entry.Column == 1), "Parent save lost layout/key/comments.");
+                Preview(layout, "launcher-layout.png");
+            }
+            using (var canceled = new LauncherLayoutForm(bound))
+            {
+                var original = bound[0].Clone(); canceled.MoveEntry(0, 1, 0, 5); canceled.DialogResult = DialogResult.Cancel;
+                Check(bound[0].Row == original.Row && bound[0].Column == original.Column, "Cancel changed the parent list.");
+            }
+            typeof(LauncherSettingsForm).GetMethod("AddPage", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(parent, null);
+            Check(bound.Any(entry => entry.Page == 4 && entry.PageRow == 0 && entry.Column == 0 && entry.Command == "internal::LauncherPreviousPage") && bound.Any(entry => entry.Page == 4 && entry.PageRow == 1 && entry.Column == 0 && entry.Command == "internal::LauncherNextPage"), "Parent page-add does not share left-edge navigation placement.");
+        }
+        using (var limit = new LauncherLayoutForm(new[] { new LauncherEntry { Row = 1999, Column = 15, Caption = "Last", Command = "last.exe" } }))
+            Check(limit.PageCount == 1000 && !limit.AddPage(), "Layout page limit changed.");
+    }
+    static void LauncherLayoutDragEvents()
+    {
+        using (var layout = new LauncherLayoutForm(Launcher().Entries))
+        using (var foreign = new LauncherLayoutForm(Launcher().Entries))
+        {
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var type = typeof(LauncherLayoutForm); var grid = Find<DataGridView>(layout);
+            layout.ShowInTaskbar = false; layout.Show(); Application.DoEvents();
+            var widths = grid.Columns.Cast<DataGridViewColumn>().Select(column => column.Width).ToArray();
+            Check(widths.Max() - widths.Min() <= 1, "Layout grid columns have unequal widths.");
+            var next = layout.Controls.Find("nextButton", true).Single();
+            var timer = (Timer)type.GetField("pageHoverTimer", flags).GetValue(layout);
+            var data = layout.CreateDragData(0);
+            var enter = new DragEventArgs(data, 0, 0, 0, DragDropEffects.Move, DragDropEffects.None);
+            type.GetMethod("PageButton_DragEnter", flags).Invoke(layout, new object[] { next, enter });
+            Check(enter.Effect == DragDropEffects.Move && timer.Enabled, "Page hover did not accept a local drag.");
+            type.GetMethod("PageHoverTimer_Tick", flags).Invoke(layout, new object[] { null, EventArgs.Empty });
+            Check(layout.CurrentPage == 2, "Dragging did not change page.");
+            type.GetMethod("PageButton_DragLeave", flags).Invoke(layout, new object[] { next, EventArgs.Empty });
+            Check(!timer.Enabled, "Page hover timer did not stop.");
+            var rectangle = grid.GetCellDisplayRectangle(5, 0, true); var point = grid.PointToScreen(new Point(rectangle.X + 10, rectangle.Y + 10));
+            var drop = new DragEventArgs(data, 0, point.X, point.Y, DragDropEffects.Move, DragDropEffects.None);
+            type.GetMethod("Grid_DragOver", flags).Invoke(layout, new object[] { grid, drop });
+            Check(drop.Effect == DragDropEffects.Move, "Grid rejected a local drag.");
+            type.GetMethod("Grid_DragDrop", flags).Invoke(layout, new object[] { grid, drop });
+            Check(layout.ReadEntries()[0].Row == 2 && layout.ReadEntries()[0].Column == 5, "Drop did not use the visible page and cell.");
+            var rejected = new DragEventArgs(foreign.CreateDragData(0), 0, point.X, point.Y, DragDropEffects.Move, DragDropEffects.Move);
+            type.GetMethod("Grid_DragOver", flags).Invoke(layout, new object[] { grid, rejected });
+            Check(rejected.Effect == DragDropEffects.None, "A foreign window's drag was accepted.");
+            var before = layout.ReadEntries()[0].Clone();
+            type.GetMethod("Grid_DragDrop", flags).Invoke(layout, new object[] { grid, rejected });
+            Check(layout.ReadEntries()[0].Row == before.Row && layout.ReadEntries()[0].Column == before.Column, "Rejected drag changed layout.");
+            layout.Hide();
+        }
+    }
     static void Backups()
     {
         var path = Path.Combine(root, "atomic.txt");
@@ -788,7 +869,7 @@ static class ConfigurationRegression
     }
     static void DesignerForms()
     {
-        foreach (var type in new[] { typeof(ConfigurationEditorForm), typeof(SensorSettingsForm), typeof(MeterLayersForm), typeof(LauncherSettingsForm), typeof(LauncherEntryForm), typeof(SensorPickerForm), typeof(IconPickerForm), typeof(SteamPickerForm), typeof(PlotEditor) })
+        foreach (var type in new[] { typeof(ConfigurationEditorForm), typeof(SensorSettingsForm), typeof(MeterLayersForm), typeof(LauncherSettingsForm), typeof(LauncherLayoutForm), typeof(LauncherEntryForm), typeof(SensorPickerForm), typeof(IconPickerForm), typeof(SteamPickerForm), typeof(PlotEditor) })
         {
             using (var surface = new System.ComponentModel.Design.DesignSurface())
             {
@@ -826,7 +907,7 @@ static class ConfigurationRegression
             Check(ReferenceEquals(body.Parent, rootControl), "Editable inherited content is inside another inherited container.");
             var inheritance = (System.ComponentModel.InheritanceAttribute)System.ComponentModel.TypeDescriptor.GetAttributes(body)[typeof(System.ComponentModel.InheritanceAttribute)];
             Check(inheritance.InheritanceLevel != System.ComponentModel.InheritanceLevel.InheritedReadOnly, "Editor content is read-only in the designer.");
-            foreach (var type in new[] { typeof(SensorSettingsForm), typeof(MeterLayersForm), typeof(LauncherSettingsForm), typeof(PlotEditor) })
+            foreach (var type in new[] { typeof(SensorSettingsForm), typeof(MeterLayersForm), typeof(LauncherSettingsForm), typeof(LauncherLayoutForm), typeof(PlotEditor) })
             using (var original = (Control)Activator.CreateInstance(type))
             {
                 var originalBody = original is ConfigurationEditorForm ? (Control)bodyField.GetValue(original) : original;
@@ -892,7 +973,9 @@ static class ConfigurationRegression
         using (var launcher = new LauncherSettingsForm())
         using (var plot = new PlotEditor())
         using (var meterLayers = new MeterLayersForm())
+        using (var launcherLayout = new LauncherLayoutForm())
         {
+            CheckUnboundDesignerGrids(launcherLayout);
             CheckUnboundDesignerGrids(meterLayers);
             CheckUnboundDesignerGrids(sensor); CheckUnboundDesignerGrids(launcher); CheckUnboundDesignerGrids(plot);
             var choices = new List<SensorChoice>();

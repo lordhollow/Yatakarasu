@@ -29,6 +29,7 @@
             this.duplicateButton = new System.Windows.Forms.Button();
             this.deleteButton = new System.Windows.Forms.Button();
             this.addPageButton = new System.Windows.Forms.Button();
+            this.layoutButton = new System.Windows.Forms.Button();
             this.commandsPanel = new System.Windows.Forms.FlowLayoutPanel();
             this.status = new System.Windows.Forms.Label();
             this.Body.SuspendLayout();
@@ -181,6 +182,12 @@
             this.addPageButton.Text = "ページを追加";
             this.addPageButton.UseVisualStyleBackColor = true;
             this.addPageButton.Click += new System.EventHandler(this.AddPageButton_Click);
+            this.layoutButton.AutoSize = true;
+            this.layoutButton.Name = "layoutButton";
+            this.layoutButton.MinimumSize = new System.Drawing.Size(110, 30);
+            this.layoutButton.Margin = new System.Windows.Forms.Padding(4);
+            this.layoutButton.Text = "ドラッグで配置…";
+            this.layoutButton.Click += new System.EventHandler(this.LayoutButton_Click);
             // 
             // commandsPanel
             // 
@@ -190,6 +197,7 @@
             this.commandsPanel.Controls.Add(this.duplicateButton);
             this.commandsPanel.Controls.Add(this.deleteButton);
             this.commandsPanel.Controls.Add(this.addPageButton);
+            this.commandsPanel.Controls.Add(this.layoutButton);
             this.commandsPanel.Dock = System.Windows.Forms.DockStyle.Top;
             this.commandsPanel.Location = new System.Drawing.Point(8, 8);
             this.commandsPanel.Name = "commandsPanel";
@@ -237,6 +245,7 @@
         private System.Windows.Forms.Button duplicateButton;
         private System.Windows.Forms.Button deleteButton;
         private System.Windows.Forms.Button addPageButton;
+        private System.Windows.Forms.Button layoutButton;
         private System.Windows.Forms.FlowLayoutPanel commandsPanel;
         private System.Windows.Forms.Label status;
     }

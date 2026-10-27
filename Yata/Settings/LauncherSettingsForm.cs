@@ -22,6 +22,29 @@ namespace Yata.Settings
         void DuplicateButton_Click(object sender, EventArgs e) => Duplicate();
         void DeleteButton_Click(object sender, EventArgs e) => Delete();
         void AddPageButton_Click(object sender, EventArgs e) => AddPage();
+        void LayoutButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                using (var dialog = new LauncherLayoutForm(entries, Current?.Page ?? 1))
+                    if (dialog.ShowDialog(this) == DialogResult.OK) ApplyLayout(dialog.ResultEntries);
+            }
+            catch (Exception ex) { EditorUi.Error(this, ex); }
+        }
+        internal void ApplyLayout(System.Collections.Generic.IEnumerable<LauncherEntry> updated)
+        {
+            var candidate = new LauncherDefinition { Key = definition.Key };
+            candidate.Entries.AddRange(updated.Select(entry => entry.Clone()));
+            candidate.Validate();
+            entries.RaiseListChangedEvents = false;
+            try
+            {
+                entries.Clear();
+                foreach (var entry in candidate.Entries.OrderBy(entry => entry.Row).ThenBy(entry => entry.Column)) entries.Add(entry);
+            }
+            finally { entries.RaiseListChangedEvents = true; entries.ResetBindings(); }
+            Dirty = true; UpdateStatus();
+        }
         void Grid_DoubleClick(object sender, EventArgs e) => Edit();
 
         protected override void LoadDefinition(string path)
@@ -88,8 +111,7 @@ namespace Yata.Settings
         {
             var row = entries.Count == 0 ? 0 : (entries.Max(x => x.Row) / 2 + 1) * 2;
             if (row >= 2000) { MessageBox.Show(this, "1000ページまで追加できます。"); return; }
-            entries.Add(new LauncherEntry { Row = row + 1, Column = 14, Caption = "前のページ", Command = "internal::LauncherPreviousPage" });
-            entries.Add(new LauncherEntry { Row = row + 1, Column = 15, Caption = "次のページ", Command = "internal::LauncherNextPage" });
+            foreach (var entry in LauncherDefinition.PageNavigation(row / 2)) entries.Add(entry);
             Dirty = true; UpdateStatus();
         }
         void UpdateStatus() => status.Text = $"{entries.Count}項目 / {(entries.Count == 0 ? 1 : entries.Max(x => x.Row) / 2 + 1)}ページ。1ページ = 2行 × 16列。";

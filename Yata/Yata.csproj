@@ -117,6 +117,12 @@
     <Compile Include="Settings\LauncherSettingsForm.Designer.cs">
       <DependentUpon>LauncherSettingsForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="Settings\LauncherLayoutForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Settings\LauncherLayoutForm.Designer.cs">
+      <DependentUpon>LauncherLayoutForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="Settings\LauncherEntryForm.cs">
       <SubType>Form</SubType>
     </Compile>

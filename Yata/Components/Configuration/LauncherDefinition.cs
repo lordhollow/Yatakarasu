@@ -25,6 +25,14 @@ namespace Yata.Components.Configuration
         public string Key { get; set; } = Guid.NewGuid().ToString("N");
         public List<LauncherEntry> Entries { get; } = new List<LauncherEntry>();
         public List<string> Comments { get; } = new List<string>();
+        internal static LauncherEntry[] PageNavigation(int pageIndex)
+        {
+            if (pageIndex < 0 || pageIndex >= 1000) throw new ArgumentOutOfRangeException(nameof(pageIndex));
+            return new[] {
+                new LauncherEntry { Row = pageIndex * 2, Column = 0, Caption = "前のページ", Command = "internal::LauncherPreviousPage" },
+                new LauncherEntry { Row = pageIndex * 2 + 1, Column = 0, Caption = "次のページ", Command = "internal::LauncherNextPage" }
+            };
+        }
         public static LauncherDefinition Load(string path)
         {
             var result = new LauncherDefinition();
