@@ -26,6 +26,8 @@
             this.selectMeterButton = new System.Windows.Forms.Button();
             this.clearMeterButton = new System.Windows.Forms.Button();
             this.layersButton = new System.Windows.Forms.Button();
+            this.upMeterButton = new System.Windows.Forms.Button();
+            this.downMeterButton = new System.Windows.Forms.Button();
             this.meterCommands = new System.Windows.Forms.FlowLayoutPanel();
             this.tabs = new System.Windows.Forms.TabControl();
             this.meterTab = new System.Windows.Forms.TabPage();
@@ -75,7 +77,7 @@
             // metersNameColumn
             // 
             this.metersNameColumn.FillWeight = 90F;
-            this.metersNameColumn.HeaderText = "表示名（最外層）";
+            this.metersNameColumn.HeaderText = "表示名（親項目）";
             this.metersNameColumn.Name = "metersNameColumn";
             this.metersNameColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
             // 
@@ -137,6 +139,16 @@
             this.layersButton.Size = new System.Drawing.Size(100, 30);
             this.layersButton.Text = "層を編集…";
             this.layersButton.Click += new System.EventHandler(this.LayersButton_Click);
+            this.upMeterButton.AutoSize = true;
+            this.upMeterButton.Name = "upMeterButton";
+            this.upMeterButton.Size = new System.Drawing.Size(90, 30);
+            this.upMeterButton.Text = "上へ";
+            this.upMeterButton.Click += new System.EventHandler(this.UpMeterButton_Click);
+            this.downMeterButton.AutoSize = true;
+            this.downMeterButton.Name = "downMeterButton";
+            this.downMeterButton.Size = new System.Drawing.Size(90, 30);
+            this.downMeterButton.Text = "下へ";
+            this.downMeterButton.Click += new System.EventHandler(this.DownMeterButton_Click);
             // 
             // meterCommands
             // 
@@ -144,6 +156,8 @@
             this.meterCommands.Controls.Add(this.selectMeterButton);
             this.meterCommands.Controls.Add(this.clearMeterButton);
             this.meterCommands.Controls.Add(this.layersButton);
+            this.meterCommands.Controls.Add(this.upMeterButton);
+            this.meterCommands.Controls.Add(this.downMeterButton);
             this.meterCommands.Dock = System.Windows.Forms.DockStyle.Top;
             this.meterCommands.Location = new System.Drawing.Point(3, 3);
             this.meterCommands.Name = "meterCommands";
@@ -261,6 +275,8 @@
         private System.Windows.Forms.Button selectMeterButton;
         private System.Windows.Forms.Button clearMeterButton;
         private System.Windows.Forms.Button layersButton;
+        private System.Windows.Forms.Button upMeterButton;
+        private System.Windows.Forms.Button downMeterButton;
         private System.Windows.Forms.FlowLayoutPanel meterCommands;
         private System.Windows.Forms.TabControl tabs;
         private System.Windows.Forms.TabPage meterTab;

@@ -49,17 +49,7 @@ namespace Yata.Settings
         void DownButton_Click(object sender, EventArgs e) => MoveLayer(1);
         internal void MoveLayer(int delta)
         {
-            grid.EndEdit();
-            if (grid.CurrentRow == null) return;
-            var row = grid.CurrentRow.Index; var target = row + delta;
-            if (target < 0 || target >= grid.Rows.Count) return;
-            for (int column = 0; column < grid.Columns.Count; column++)
-            {
-                var value = grid.Rows[row].Cells[column].Value;
-                grid.Rows[row].Cells[column].Value = grid.Rows[target].Cells[column].Value;
-                grid.Rows[target].Cells[column].Value = value;
-            }
-            grid.CurrentCell = grid.Rows[target].Cells[0];
+            EditorUi.MoveRow(grid, delta);
         }
         void SelectButton_Click(object sender, EventArgs e)
         {

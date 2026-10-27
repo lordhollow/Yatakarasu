@@ -171,11 +171,7 @@ namespace Yata
             {
                 foreach (var meterDef in sensorDefine.MeterDefines.Take(6))
                 {
-                    var tacho = new Tachometer(meterDef.Layers.Select(layer => new Tachometer.Layer(layer.Min, layer.Max, monitor[layer.Id], layer.Name, layer.Unit)))
-                    {
-                        Caption = meterDef.Name,
-                        Unit = meterDef.Unit,
-                    };
+                    var tacho = Tachometer.FromDefinition(meterDef, id => monitor[id]);
                     container.Add(tacho, new Point(screenParameter.ScreenWidth - 72 - 16, meterY[meterIndex++]));
                     sensorWidgets.Add(tacho);
                 }

@@ -24,6 +24,17 @@ namespace Yata.Settings
             InitializeDefinition();
         }
         void SelectMeterButton_Click(object sender, EventArgs e) => SelectSensor(meters);
+        void UpMeterButton_Click(object sender, EventArgs e) => MoveMeter(-1);
+        void DownMeterButton_Click(object sender, EventArgs e) => MoveMeter(1);
+        internal void MoveMeter(int delta)
+        {
+            if (meters.CurrentRow == null) return;
+            var source = meters.CurrentRow.Index;
+            if (!EditorUi.MoveRow(meters, delta)) return;
+            var target = meters.CurrentRow.Index;
+            var saved = innerLayers[source]; innerLayers[source] = innerLayers[target]; innerLayers[target] = saved;
+            Dirty = true;
+        }
         void LayersButton_Click(object sender, EventArgs e)
         {
             if (meters.CurrentRow == null) return;
@@ -79,7 +90,7 @@ namespace Yata.Settings
                 innerLayers.Add(meter.InnerLayers.Select(layer => layer.Clone()).ToList());
             }
             for (int i = 0; i < 2; i++) plots[i].LoadDefinition(definition.PlotDefines[i]);
-            note.Text = trimmed ? "このファイルには上限を超える設定があります。保存すると先頭6メーター・2グラフになります。元ファイルは.bakに保存します。" : "タコメーター6個・グラフ2個。表は最外層の項目です。「層を編集」で項目追加・順序変更。未設定IDは「-」。";
+            note.Text = trimmed ? "このファイルには上限を超える設定があります。保存すると先頭6メーター・2グラフになります。元ファイルは.bakに保存します。" : "タコメーター6個・グラフ2個。親IDが未割当で子がある場合、親は名前のみ。「層を編集」で項目追加。上へ／下へで配置変更。";
         }
 
         protected override void SaveDefinition(string path)

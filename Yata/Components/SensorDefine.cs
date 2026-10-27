@@ -131,7 +131,7 @@ namespace Yata.Components
             }
             foreach(var meter in MeterDefines)
             {
-                foreach (var layer in meter.Layers) yield return layer.Id;
+                foreach (var layer in meter.DisplayLayers) yield return layer.Id;
             }
         }
     }
@@ -182,6 +182,8 @@ namespace Yata.Components
         public MeterDefine() { }
         public MeterDefine(Match m) : base(m) { }
         public List<MeterItemDefine> InnerLayers { get; } = new List<MeterItemDefine>();
+        public bool IsCaptionOnly => InnerLayers.Count > 0 && !HasSensor;
+        public IEnumerable<MeterItemDefine> DisplayLayers => IsCaptionOnly ? InnerLayers : Layers;
         public IEnumerable<MeterItemDefine> Layers
         {
             get { yield return this; foreach (var layer in InnerLayers) yield return layer; }
@@ -204,6 +206,7 @@ namespace Yata.Components
         public float Min;
         public float Max;
         public string Id;
+        public bool HasSensor => !string.IsNullOrWhiteSpace(Id) && Id.Trim() != "-";
         public MeterItemDefine Clone() => new MeterItemDefine { Name = Name, Unit = Unit, Min = Min, Max = Max, Id = Id };
     }
 

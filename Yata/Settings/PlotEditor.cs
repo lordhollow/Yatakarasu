@@ -21,6 +21,12 @@ namespace Yata.Settings
             Series.CurrentCell = Series.Rows[index].Cells[0]; Changed?.Invoke();
         }
         void SelectButton_Click(object sender, EventArgs e) => SelectRequested?.Invoke();
+        void UpButton_Click(object sender, EventArgs e) => MoveSeries(-1);
+        void DownButton_Click(object sender, EventArgs e) => MoveSeries(1);
+        internal void MoveSeries(int delta)
+        {
+            if (EditorUi.MoveRow(Series, delta)) Changed?.Invoke();
+        }
         void ColorButton_Click(object sender, EventArgs e)
         {
             if (Series.CurrentRow == null) return;

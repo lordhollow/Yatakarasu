@@ -22,19 +22,21 @@ namespace Yata.Components.Widget
         readonly RectangleF[] rings;
         readonly Pen[,] pens;
         readonly Font font;
+        readonly bool captionOnly;
         bool needUpdate = true;
         string disp = "----";
         string displayText;
         string displayedCaption, displayedUnit;
         // -1 is the all-layer view. This state belongs only to the widget instance.
         int visibleLayer = -1;
-        int SingleLayer => visibleLayer >= 0 ? visibleLayer : layers.Length == 1 ? 0 : -1;
+        int SingleLayer => visibleLayer >= 0 ? visibleLayer : layers.Length == 1 && !captionOnly ? 0 : -1;
         internal int VisibleLayer => visibleLayer;
         internal string DisplayText => displayText;
 
         public Tachometer(float min, float max, ISensor sensor) : this(new[] { new Layer(min, max, sensor) }) { }
-        internal Tachometer(IEnumerable<Layer> definitions) : base(WidgetScaleMode.Fixed, 72, 72)
+        internal Tachometer(IEnumerable<Layer> definitions, bool captionOnly = false) : base(WidgetScaleMode.Fixed, 72, 72)
         {
+            this.captionOnly = captionOnly;
             layers = definitions.ToArray();
             if (layers.Length == 0 || layers.Any(layer => layer.Sensor == null || !Finite(layer.Min) || !Finite(layer.Max) || layer.Min >= layer.Max))
                 throw new ArgumentException("Each meter layer needs a sensor and a finite increasing range.");
@@ -54,9 +56,12 @@ namespace Yata.Components.Widget
             }
         }
         public string Unit { get; set; }
+        internal static Tachometer FromDefinition(MeterDefine definition, Func<string, ISensor> resolve)
+            => new Tachometer(definition.DisplayLayers.Select(layer => new Layer(layer.Min, layer.Max, resolve(layer.Id), layer.Name, layer.Unit)), definition.IsCaptionOnly)
+            { Caption = definition.Name, Unit = definition.Unit };
         public override void Click(int x, int y)
         {
-            if (layers.Length <= 1) return;
+            if (layers.Length <= 1 && !captionOnly) return;
             visibleLayer++;
             if (visibleLayer >= layers.Length) visibleLayer = -1;
             needUpdate = true;
@@ -90,7 +95,7 @@ namespace Yata.Components.Widget
                 displayedCaption = Caption; displayedUnit = Unit;
                 displayText = SingleLayer >= 0
                     ? $"{LayerName(SingleLayer)}\r\n{disp}\r\n{layers[SingleLayer].Unit ?? Unit}"
-                    : LayerName(0) + (available.All(value => value) ? "" : "\r\n----");
+                    : AllLayersName + (available.All(value => value) ? "" : "\r\n----");
             }
             return changed;
         }
@@ -114,9 +119,10 @@ namespace Yata.Components.Widget
                     if (sweep > 0) graphics.DrawArc(pens[i, color], rings[i], -90, sweep);
                 }
             }
-            if (displayText == null) displayText = SingleLayer >= 0 ? $"{LayerName(SingleLayer)}\r\n----\r\n{layers[SingleLayer].Unit ?? Unit}" : LayerName(0) + "\r\n----";
+            if (displayText == null) displayText = SingleLayer >= 0 ? $"{LayerName(SingleLayer)}\r\n----\r\n{layers[SingleLayer].Unit ?? Unit}" : AllLayersName + "\r\n----";
             graphics.DrawString(DisplayText, font, Brushes.White, 0, 2);
         }
         string LayerName(int index) => layers[index].Name ?? (index == 0 ? Caption : layers[index].Sensor.Name);
+        string AllLayersName => captionOnly ? Caption : LayerName(0);
     }
 }

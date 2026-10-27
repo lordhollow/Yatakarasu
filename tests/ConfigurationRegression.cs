@@ -40,6 +40,8 @@ static class ConfigurationRegression
             Run("Concentric meters normalize layers and render missing samples", MeterLayerDrawing);
             Run("Meter clicks cycle all layers and individual labels without persistence", MeterLayerCycling);
             Run("Meter layer editor reorders, cancels and preserves all slots", MeterLayerEditing);
+            Run("Unassigned meter parents provide captions without becoming layers", MeterCaptionParents);
+            Run("Meter groups and plot series reorder with their full settings", SensorOrdering);
             Run("Launcher preserves keys, comments, options and page positions", LauncherRoundTrip);
             Run("Launcher rejects duplicate and out-of-range positions", LauncherValidation);
             Run("Atomic saves keep a backup", Backups);
@@ -275,6 +277,102 @@ static class ConfigurationRegression
             typeof(SensorSettingsForm).GetMethod("SaveDefinition", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(form, new object[] { output });
             Check(form.ResultDefinition.MeterDefines[0].InnerLayers.Count == 0, "Returning to a single layer retained old layers.");
         }
+    }
+    static void MeterCaptionParents()
+    {
+        using (var usage = new CodexUsageMonitor(token => System.Threading.Tasks.Task.FromResult(CodexUsageSnapshot.Parse("{}")), () => DateTimeOffset.UtcNow))
+        {
+            var first = new ValueHistorySensor(new CodexUsageSensor(usage, false)) { Value = 50 };
+            var second = new ValueHistorySensor(new CodexUsageSensor(usage, true)) { Value = 25 };
+            var missing = new ValueHistorySensor(new CodexUsageSensor(usage, true)) { Value = null };
+            var definition = new MeterDefine { Name = "Usage", Id = "-" };
+            definition.InnerLayers.Add(new MeterItemDefine { Name = "Child A", Id = "/a", Unit = "%" });
+            definition.InnerLayers.Add(new MeterItemDefine { Name = "Child B", Id = "/b", Unit = "%" });
+            foreach (var unassigned in new[] { "-", "", "  ", " - " })
+            {
+                definition.Id = unassigned;
+                Check(definition.IsCaptionOnly && definition.DisplayLayers.Count() == 2, "Unassigned parent became a display layer.");
+                var sensorDefinition = new SensorDefine(); sensorDefinition.MeterDefines.Add(definition);
+                Check(sensorDefinition.SensorUsage().SequenceEqual(new[] { "/a", "/b" }), "Caption-only parent entered the monitored sensor list.");
+                var requested = new List<string>();
+                using (var meter = Tachometer.FromDefinition(definition, id => { requested.Add(id); return id == "/a" ? first : second; }))
+                using (var image = new Bitmap(72, 72))
+                using (var graphics = Graphics.FromImage(image))
+                {
+                    meter.Update(); meter.Draw(graphics);
+                    Check(requested.SequenceEqual(new[] { "/a", "/b" }) && meter.DisplayText == "Usage", "Parent was resolved as a sensor or its caption was lost.");
+                    Check(image.GetPixel(63, 36).ToArgb() == Color.DarkSlateBlue.ToArgb(), "First child is not the outer ring.");
+                    meter.Click(0, 0); meter.Update(); Check(meter.DisplayText == "Child A\r\n50.0\r\n%", "Cycle includes the parent.");
+                    meter.Click(0, 0); meter.Update(); Check(meter.DisplayText == "Child B\r\n25.0\r\n%", "Cycle omitted the second child.");
+                    meter.Click(0, 0); meter.Update(); Check(meter.VisibleLayer == -1 && meter.DisplayText == "Usage", "Cycle did not return to the parent caption.");
+                }
+            }
+            definition.Id = "/assigned-but-missing";
+            using (var meter = Tachometer.FromDefinition(definition, id => id == "/a" ? first : id == "/b" ? second : missing))
+            { meter.Update(); Check(!definition.IsCaptionOnly && definition.DisplayLayers.Count() == 3 && meter.DisplayText == "Usage\r\n----", "An assigned but missing parent was incorrectly hidden."); }
+            definition.Id = "-"; definition.InnerLayers.RemoveAt(1);
+            var config = Sensors(); config.MeterDefines[0] = definition;
+            var configPath = Path.Combine(root, "caption-parent.txt"); config.Save(configPath);
+            var restored = new SensorDefine(); restored.ReadFromFile(configPath, true);
+            Check(restored.MeterDefines[0].IsCaptionOnly && restored.MeterDefines[0].DisplayLayers.Single().Name == "Child A", "Caption-only status was lost on save/reload.");
+            using (var meter = Tachometer.FromDefinition(definition, id => first))
+            {
+                meter.Update(); Check(meter.DisplayText == "Usage", "A single child lost its group caption.");
+                meter.Click(0, 0); meter.Update(); Check(meter.DisplayText == "Child A\r\n50.0\r\n%", "A single child cannot be inspected.");
+                meter.Click(0, 0); meter.Update(); Check(meter.VisibleLayer == -1 && meter.DisplayText == "Usage", "Single-child group did not return to caption view.");
+            }
+            definition.InnerLayers.Clear();
+            using (var meter = Tachometer.FromDefinition(definition, id => missing))
+            { meter.Update(); Check(!definition.IsCaptionOnly && meter.DisplayText.Contains("----"), "An unassigned standalone meter stopped showing its missing state."); }
+        }
+    }
+    static void SensorOrdering()
+    {
+        using (var form = new SensorSettingsForm(Path.Combine(root, "layered-sensor.txt"), new List<SensorChoice>()))
+        {
+            var grid = Find<DataGridView>(form);
+            grid.CurrentCell = grid.Rows[0].Cells[0];
+            form.MoveMeter(-1); Check(grid.CurrentRow.Index == 0, "First meter moved above the boundary.");
+            SensorSettingsForm.DataCell(grid.Rows[0], "Name").Value = "Edited group";
+            form.MoveMeter(1);
+            var path = Path.Combine(root, "reordered-sensor.txt");
+            typeof(SensorSettingsForm).GetMethod("SaveDefinition", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(form, new object[] { path });
+            var saved = new SensorDefine(); saved.ReadFromFile(path, true);
+            Check(saved.MeterDefines[1].Name == "Edited group" && saved.MeterDefines[1].InnerLayers.Select(layer => layer.Name).SequenceEqual(new[] { "GPU", "GPT" }), "Moving a meter lost its child layers or edited name.");
+            Check(saved.MeterDefines[0].Id == "-" && saved.MeterDefines[2].Id == "/gpu/0/fan/0", "Moving a meter changed unrelated slots.");
+            form.MoveMeter(-1);
+            grid.CurrentCell = grid.Rows[5].Cells[0]; form.MoveMeter(1); Check(grid.CurrentRow.Index == 5, "Last meter moved outside the grid.");
+            typeof(SensorSettingsForm).GetMethod("SaveDefinition", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(form, new object[] { path });
+            Check(form.ResultDefinition.MeterDefines[0].InnerLayers.Count == 2, "Moving a group back lost its children.");
+        }
+        using (var plot = new PlotEditor())
+        {
+            var definition = new PlotDefine { Name = "Ordering" };
+            definition.Items.Add(new PlotItemDefine { Name = "A", Id = "/a", Color = Color.Red });
+            definition.Items.Add(new PlotItemDefine { Name = "B", Id = "/b", Color = Color.Blue });
+            plot.LoadDefinition(definition);
+            int changes = 0; plot.Changed += () => changes++;
+            plot.Series.CurrentCell = plot.Series.Rows[0].Cells[0]; plot.MoveSeries(-1);
+            Check(changes == 0, "A boundary no-op marked the plot changed.");
+            plot.MoveSeries(1);
+            var result = plot.Read();
+            Check(result.Items.Select(item => item.Id).SequenceEqual(new[] { "/b", "/a" }) && result.Items[1].Color.ToArgb() == Color.Red.ToArgb() && result.Items[1].Name == "A" && changes == 1, "Series movement split name, ID and color or missed dirty notification.");
+            plot.MoveSeries(1); Check(changes == 1, "Last series moved outside the grid.");
+            plot.MoveSeries(-1); Check(plot.Read().Items[0].Id == "/a" && changes == 2, "Series could not move upward.");
+            using (var parent = new SensorSettingsForm(Path.Combine(root, "sensor.txt"), new List<SensorChoice>()))
+            {
+                Find<TabControl>(parent).SelectedIndex = 1;
+                var editedPlot = (PlotEditor)typeof(SensorSettingsForm).GetField("plot1", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(parent);
+                editedPlot.LoadDefinition(definition); editedPlot.Series.CurrentCell = editedPlot.Series.Rows[0].Cells[0]; editedPlot.MoveSeries(1);
+                var output = Path.Combine(root, "reordered-plot.txt");
+                typeof(SensorSettingsForm).GetMethod("SaveDefinition", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(parent, new object[] { output });
+                var restored = new SensorDefine(); restored.ReadFromFile(output, true);
+                Check(restored.PlotDefines[0].Items[0].Id == "/b", "Plot order was not saved and restored.");
+                Preview(parent, "sensor-plot-reorder.png");
+            }
+        }
+        using (var editor = new MeterLayersForm())
+            Check(editor.Controls.Find("saveButton", true).Single().Text == "決定", "Layer editor confirmation text regressed.");
     }
     static void LauncherRoundTrip()
     {

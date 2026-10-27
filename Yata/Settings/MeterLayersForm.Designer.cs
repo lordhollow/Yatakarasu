@@ -106,7 +106,7 @@ namespace Yata.Settings
             this.hint.Dock = System.Windows.Forms.DockStyle.Top;
             this.hint.Name = "hint";
             this.hint.Padding = new System.Windows.Forms.Padding(4, 6, 4, 6);
-            this.hint.Text = "上から外側→内側。各項目の範囲が有効です。多層時は先頭の表示名のみ（取得不能があれば ----）。";
+            this.hint.Text = "上から外側→内側。親IDが未割当で子がある場合、親は名前のみ。各層の範囲が有効です。";
             this.hint.TabIndex = 3;
             this.footer.AutoSize = true;
             this.footer.Controls.Add(this.cancelButton);
@@ -120,7 +120,7 @@ namespace Yata.Settings
             this.saveButton.AutoSize = true;
             this.saveButton.Name = "saveButton";
             this.saveButton.Size = new System.Drawing.Size(100, 30);
-            this.saveButton.Text = "設定に戻す";
+            this.saveButton.Text = "決定";
             this.saveButton.Click += new System.EventHandler(this.SaveButton_Click);
             this.cancelButton.AutoSize = true;
             this.cancelButton.DialogResult = System.Windows.Forms.DialogResult.Cancel;

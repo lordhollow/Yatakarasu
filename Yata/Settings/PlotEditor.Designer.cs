@@ -39,6 +39,8 @@ namespace Yata.Settings
             this.selectButton = new System.Windows.Forms.Button();
             this.colorButton = new System.Windows.Forms.Button();
             this.deleteButton = new System.Windows.Forms.Button();
+            this.upButton = new System.Windows.Forms.Button();
+            this.downButton = new System.Windows.Forms.Button();
             this.commandsPanel = new System.Windows.Forms.FlowLayoutPanel();
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.Size = new System.Drawing.Size(1000, 550);
@@ -154,6 +156,20 @@ namespace Yata.Settings
             this.deleteButton.Margin = new System.Windows.Forms.Padding(4);
             this.deleteButton.UseVisualStyleBackColor = true;
             this.deleteButton.Click += new System.EventHandler(this.DeleteButton_Click);
+            this.upButton.Name = "upButton";
+            this.upButton.Text = "上へ";
+            this.upButton.AutoSize = true;
+            this.upButton.MinimumSize = new System.Drawing.Size(90, 30);
+            this.upButton.Margin = new System.Windows.Forms.Padding(4);
+            this.upButton.UseVisualStyleBackColor = true;
+            this.upButton.Click += new System.EventHandler(this.UpButton_Click);
+            this.downButton.Name = "downButton";
+            this.downButton.Text = "下へ";
+            this.downButton.AutoSize = true;
+            this.downButton.MinimumSize = new System.Drawing.Size(90, 30);
+            this.downButton.Margin = new System.Windows.Forms.Padding(4);
+            this.downButton.UseVisualStyleBackColor = true;
+            this.downButton.Click += new System.EventHandler(this.DownButton_Click);
             this.commandsPanel.Name = "commandsPanel";
             this.commandsPanel.Dock = System.Windows.Forms.DockStyle.Top;
             this.commandsPanel.AutoSize = true;
@@ -163,6 +179,8 @@ namespace Yata.Settings
             this.commandsPanel.Controls.Add(this.selectButton);
             this.commandsPanel.Controls.Add(this.colorButton);
             this.commandsPanel.Controls.Add(this.deleteButton);
+            this.commandsPanel.Controls.Add(this.upButton);
+            this.commandsPanel.Controls.Add(this.downButton);
             this.Controls.Add(this.series);
             this.Controls.Add(this.commandsPanel);
             this.Controls.Add(this.propertiesPanel);
@@ -195,6 +213,8 @@ namespace Yata.Settings
         private System.Windows.Forms.Button selectButton;
         private System.Windows.Forms.Button colorButton;
         private System.Windows.Forms.Button deleteButton;
+        private System.Windows.Forms.Button upButton;
+        private System.Windows.Forms.Button downButton;
         private System.Windows.Forms.FlowLayoutPanel commandsPanel;
     }
 }
