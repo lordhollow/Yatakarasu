@@ -48,15 +48,15 @@ namespace Yata.Components.Widget
             font = new Font("BIZ UDPゴシック", 7.5f);
             // Cache GDI resources and geometry; repeated redraws do not allocate pens/paths.
             var band = 30f / layers.Length;
-            var gap = Math.Min(1.5f, band * 0.2f);
             for (int i = 0; i < layers.Length; i++)
             {
                 fractions[i] = 1f;
                 var radius = 34f - (i + 0.5f) * band;
                 rings[i] = new RectangleF(36 - radius, 36 - radius, radius * 2, radius * 2);
                 var colors = new[] { Color.DarkSlateBlue, Color.DarkOrange, Color.Red };
-                for (int c = 0; c < colors.Length; c++) pens[i, c] = new Pen(colors[c], band - gap);
-                var half = (band - gap) / 2;
+                // Adjacent bands share the same boundary, without a transparent gutter.
+                for (int c = 0; c < colors.Length; c++) pens[i, c] = new Pen(colors[c], band);
+                var half = band / 2;
                 var outer = new RectangleF(rings[i].X - half, rings[i].Y - half, rings[i].Width + 2 * half, rings[i].Height + 2 * half);
                 var inner = new RectangleF(rings[i].X + half, rings[i].Y + half, rings[i].Width - 2 * half, rings[i].Height - 2 * half);
                 var outline = new System.Drawing.Drawing2D.GraphicsPath();

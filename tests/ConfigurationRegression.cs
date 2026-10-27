@@ -38,6 +38,7 @@ static class ConfigurationRegression
             Run("Strict parser reports malformed sensor lines", SensorParsing);
             Run("Meter layers preserve order, independent ranges and sensor usage", MeterLayerDefinitions);
             Run("Concentric meters normalize layers and render missing samples", MeterLayerDrawing);
+            Run("Adjacent meter layers have no transparent gaps", MeterLayerBoundaries);
             Run("Meter clicks cycle all layers and individual labels without persistence", MeterLayerCycling);
             Run("Meter layer editor reorders, cancels and preserves all slots", MeterLayerEditing);
             Run("Unassigned meter parents provide captions without becoming layers", MeterCaptionParents);
@@ -156,6 +157,34 @@ static class ConfigurationRegression
         Reject(() => new SensorDefine().ReadFromFile(orphan, true));
         loaded.ReadFromFile(Path.Combine(root, "sensor.txt"), true);
         Check(loaded.MeterDefines.All(meter => meter.InnerLayers.Count == 0), "Legacy file gained layers.");
+    }
+    static void MeterLayerBoundaries()
+    {
+        using (var usage = new CodexUsageMonitor(token => System.Threading.Tasks.Task.FromResult(CodexUsageSnapshot.Parse("{}")), () => DateTimeOffset.UtcNow))
+        {
+            var sensor = new ValueHistorySensor(new CodexUsageSensor(usage, false)) { Value = 50 };
+            foreach (int count in new[] { 2, 3, 6, 12 })
+            using (var meter = new Tachometer(Enumerable.Range(0, count).Select(i => new Tachometer.Layer(0, 100, sensor))) { Caption = "" })
+            using (var image = new Bitmap(72, 72))
+            using (var graphics = Graphics.FromImage(image))
+            {
+                meter.Update(); meter.Draw(graphics);
+                // Inside the filled sector, including every shared circular boundary.
+                for (int y = 36; y <= 52; y++)
+                    for (int x = 41; x <= 68; x++)
+                    {
+                        double dx = x - 36, dy = y - 36, radius = Math.Sqrt(dx * dx + dy * dy);
+                        if (radius >= 6 && radius <= 32 && dy <= dx * 0.6)
+                            Check(image.GetPixel(x, y).A == 255, $"Transparent layer gap with {count} layers at ({x}, {y}).");
+                    }
+                Check(image.GetPixel(36, 36).A == 0 && image.GetPixel(0, 36).A == 0, "Removing layer gaps filled the center or outside background.");
+                if (count == 3)
+                {
+                    var preview = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "previews", "meter-layers-no-gaps.png");
+                    Directory.CreateDirectory(Path.GetDirectoryName(preview)); image.Save(preview); images.Add(preview);
+                }
+            }
+        }
     }
     static void MeterLayerDrawing()
     {
