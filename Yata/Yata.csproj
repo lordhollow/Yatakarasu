@@ -105,6 +105,12 @@
     <Compile Include="Settings\SensorSettingsForm.Designer.cs">
       <DependentUpon>SensorSettingsForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="Settings\MeterLayersForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Settings\MeterLayersForm.Designer.cs">
+      <DependentUpon>MeterLayersForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="Settings\LauncherSettingsForm.cs">
       <SubType>Form</SubType>
     </Compile>

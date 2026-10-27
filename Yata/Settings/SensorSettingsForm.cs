@@ -11,6 +11,7 @@ namespace Yata.Settings
     internal sealed partial class SensorSettingsForm : ConfigurationEditorForm
     {
         readonly List<SensorChoice> sensors = new List<SensorChoice>();
+        readonly List<List<MeterItemDefine>> innerLayers = new List<List<MeterItemDefine>>();
         PlotEditor[] plots => new[] { plot1, plot2 };
         public SensorDefine ResultDefinition { get; private set; }
 
@@ -23,6 +24,32 @@ namespace Yata.Settings
             InitializeDefinition();
         }
         void SelectMeterButton_Click(object sender, EventArgs e) => SelectSensor(meters);
+        void LayersButton_Click(object sender, EventArgs e)
+        {
+            if (meters.CurrentRow == null) return;
+            try
+            {
+                meters.EndEdit();
+                var index = meters.CurrentRow.Index;
+                using (var dialog = new MeterLayersForm(ReadMeter(meters.CurrentRow).Layers, sensors))
+                    if (dialog.ShowDialog(this) == DialogResult.OK) { ApplyMeterLayers(index, dialog.ResultLayers); Dirty = true; }
+            }
+            catch (Exception ex) { EditorUi.Error(this, ex); }
+        }
+        MeterDefine ReadMeter(DataGridViewRow row)
+        {
+            var meter = new MeterDefine { Name = Cell(row, "Name"), Unit = Cell(row, "Unit"), Min = Parse(Cell(row, "Min")), Max = Parse(Cell(row, "Max")), Id = Cell(row, "Id") };
+            meter.InnerLayers.AddRange(innerLayers[row.Index].Select(layer => layer.Clone()));
+            return meter;
+        }
+        internal void ApplyMeterLayers(int index, IList<MeterItemDefine> layers)
+        {
+            if (layers.Count == 0) throw new FormatException("1項目以上を割り当ててください。");
+            var first = layers[0]; var row = meters.Rows[index];
+            DataCell(row, "Name").Value = first.Name; DataCell(row, "Unit").Value = first.Unit;
+            DataCell(row, "Min").Value = Number(first.Min); DataCell(row, "Max").Value = Number(first.Max); DataCell(row, "Id").Value = first.Id;
+            innerLayers[index] = layers.Skip(1).Select(layer => layer.Clone()).ToList();
+        }
         void ClearMeterButton_Click(object sender, EventArgs e)
         {
             if (meters.CurrentRow != null) { DataCell(meters.CurrentRow, "Id").Value = "-"; Dirty = true; }
@@ -45,9 +72,14 @@ namespace Yata.Settings
             bool trimmed = definition.MeterDefines.Count > 6 || definition.PlotDefines.Count > 2;
             definition.EnsureFixedLayout();
             meters.Rows.Clear();
-            foreach (var meter in definition.MeterDefines) meters.Rows.Add(meter.Name, meter.Unit, Number(meter.Min), Number(meter.Max), meter.Id);
+            innerLayers.Clear();
+            foreach (var meter in definition.MeterDefines)
+            {
+                meters.Rows.Add(meter.Name, meter.Unit, Number(meter.Min), Number(meter.Max), meter.Id);
+                innerLayers.Add(meter.InnerLayers.Select(layer => layer.Clone()).ToList());
+            }
             for (int i = 0; i < 2; i++) plots[i].LoadDefinition(definition.PlotDefines[i]);
-            note.Text = trimmed ? "このファイルには上限を超える設定があります。保存すると先頭6メーター・2グラフになります。元ファイルは.bakに保存します。" : "タコメーター6個・グラフ2個。未設定のIDは「-」。IDは範囲平均（/1-2）・合計（ID+ID）も入力できます。";
+            note.Text = trimmed ? "このファイルには上限を超える設定があります。保存すると先頭6メーター・2グラフになります。元ファイルは.bakに保存します。" : "タコメーター6個・グラフ2個。表は最外層の項目です。「層を編集」で項目追加・順序変更。未設定IDは「-」。";
         }
 
         protected override void SaveDefinition(string path)
@@ -56,7 +88,7 @@ namespace Yata.Settings
             var definition = new SensorDefine();
             definition.PlotDefines.AddRange(plots.Select(x => x.Read()));
             foreach (DataGridViewRow row in meters.Rows)
-                definition.MeterDefines.Add(new MeterDefine { Name = Cell(row, "Name"), Unit = Cell(row, "Unit"), Min = Parse(Cell(row, "Min")), Max = Parse(Cell(row, "Max")), Id = Cell(row, "Id") });
+                definition.MeterDefines.Add(ReadMeter(row));
             definition.Save(path);
             ResultDefinition = definition;
         }

@@ -28,6 +28,8 @@ namespace Yata.Components
             var regPlot = new Regex(@"^Plot\t(?<name>.+?)\t(?<unit>.+?)\t(?<min>.+?)\t(?<max>.+?)\t(?<ll>.+?)\t(?<hl>.+)");
             var regPlotItem = new Regex(@"^\t(?<name>.+?)\t(?<id>[^\t]+)\t(?<r>\d+),(?<g>\d+),(?<b>\d+)(,(?<a>\d+))?");
             var regMeter = new Regex(@"^Meter\t(?<name>.+?)\t(?<unit>.+?)\t(?<min>.+?)\t(?<max>.+?)\t(?<id>[^\t]+)");
+            var regLayer = new Regex(@"^MeterLayer\t(?<name>.+?)\t(?<unit>.+?)\t(?<min>.+?)\t(?<max>.+?)\t(?<id>[^\t]+)");
+            MeterDefine currentMeter = null;
 
             int lineNumber = 0;
             foreach (var line in File.ReadAllLines(filename))
@@ -39,22 +41,32 @@ namespace Yata.Components
                     var m = regPlot.Match(line);
                     if (m.Success)
                     {
+                        currentMeter = null;
                         PlotDefines.Add(new PlotDefine(m));
                         continue;
                     }
                     m = regPlotItem.Match(line);
                     if (m.Success)
                     {
+                        currentMeter = null;
                         PlotDefines[PlotDefines.Count - 1].Items.Add(new PlotItemDefine(m));
                         continue;
                     }
                     m = regMeter.Match(line);
                     if (m.Success)
                     {
-                        MeterDefines.Add(new MeterDefine(m));
+                        currentMeter = new MeterDefine(m);
+                        MeterDefines.Add(currentMeter);
                         continue;
                     }
-                    if (strict) throw new FormatException("Plot、Meter、またはグラフ項目の形式が不正です。");
+                    m = regLayer.Match(line);
+                    if (m.Success)
+                    {
+                        if (currentMeter == null) throw new FormatException("MeterLayerはMeterの直後に指定してください。");
+                        currentMeter.InnerLayers.Add(new MeterItemDefine(m));
+                        continue;
+                    }
+                    if (strict) throw new FormatException("Plot、Meter、MeterLayer、またはグラフ項目の形式が不正です。");
                 }
                 catch (Exception ex)
                 {
@@ -92,8 +104,13 @@ namespace Yata.Components
             }
             foreach (var meter in MeterDefines)
             {
-                ValidateRange(meter.Min, meter.Max);
-                text.AppendLine(string.Join("\t", "Meter", Field(string.IsNullOrWhiteSpace(meter.Name) ? "未設定" : meter.Name), Field(string.IsNullOrEmpty(meter.Unit) ? " " : meter.Unit), Number(meter.Min), Number(meter.Max), Field(string.IsNullOrWhiteSpace(meter.Id) ? "-" : meter.Id)));
+                bool first = true;
+                foreach (var layer in meter.Layers)
+                {
+                    ValidateRange(layer.Min, layer.Max);
+                    text.AppendLine(string.Join("\t", first ? "Meter" : "MeterLayer", Field(string.IsNullOrWhiteSpace(layer.Name) ? "未設定" : layer.Name), Field(string.IsNullOrEmpty(layer.Unit) ? " " : layer.Unit), Number(layer.Min), Number(layer.Max), Field(string.IsNullOrWhiteSpace(layer.Id) ? "-" : layer.Id)));
+                    first = false;
+                }
             }
             ConfigurationFile.Save(path, text.ToString());
         }
@@ -114,7 +131,7 @@ namespace Yata.Components
             }
             foreach(var meter in MeterDefines)
             {
-                yield return meter.Id;
+                foreach (var layer in meter.Layers) yield return layer.Id;
             }
         }
     }
@@ -160,10 +177,21 @@ namespace Yata.Components
         public System.Drawing.Color Color;
     }
 
-    class MeterDefine
+    class MeterDefine : MeterItemDefine
     {
-        public MeterDefine() { Min = 0; Max = 100; Unit = " "; Id = ""; }
-        public MeterDefine(Match m)
+        public MeterDefine() { }
+        public MeterDefine(Match m) : base(m) { }
+        public List<MeterItemDefine> InnerLayers { get; } = new List<MeterItemDefine>();
+        public IEnumerable<MeterItemDefine> Layers
+        {
+            get { yield return this; foreach (var layer in InnerLayers) yield return layer; }
+        }
+    }
+
+    class MeterItemDefine
+    {
+        public MeterItemDefine() { Min = 0; Max = 100; Unit = " "; Id = ""; }
+        public MeterItemDefine(Match m)
         {
             Name = m.Groups["name"].Value;
             Unit = m.Groups["unit"].Value;
@@ -176,6 +204,7 @@ namespace Yata.Components
         public float Min;
         public float Max;
         public string Id;
+        public MeterItemDefine Clone() => new MeterItemDefine { Name = Name, Unit = Unit, Min = Min, Max = Max, Id = Id };
     }
 
 }

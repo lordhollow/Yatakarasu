@@ -275,7 +275,7 @@ static class HardwareMonitorRegression
         var meter = (OwnerDrawWidget)Activator.CreateInstance(assembly.GetType("Yata.Components.Widget.Tachometer"), new object[] { 0, 100, sample });
         Check(meter.Update(), "Initial missing meter was not drawn.");
         var display = meter.GetType().GetField("disp", BindingFlags.Instance | BindingFlags.NonPublic);
-        Check((string)display.GetValue(meter) == "N/A", "Meter did not show N/A.");
+        Check((string)display.GetValue(meter) == "----", "Meter did not show ----.");
         var list = (OwnerDrawWidget)Activator.CreateInstance(assembly.GetType("Yata.Components.Widget.SensorCurrentList"));
         list.GetType().GetMethod("Add").Invoke(list, new object[] { sample, "Test", Color.Red });
         using (var bitmap = new Bitmap(200, 200))
@@ -287,7 +287,7 @@ static class HardwareMonitorRegression
             Check(meter.Update(), "Meter did not redraw on recovery.");
             meter.Draw(graphics);
             list.Draw(graphics);
-            Check((string)display.GetValue(meter) != "N/A", "Meter remained missing after recovery.");
+            Check((string)display.GetValue(meter) != "----", "Meter remained missing after recovery.");
         }
     }
 

@@ -171,8 +171,7 @@ namespace Yata
             {
                 foreach (var meterDef in sensorDefine.MeterDefines.Take(6))
                 {
-                    var id = meterDef.Id;
-                    var tacho = new Tachometer(meterDef.Min, meterDef.Max, monitor[id])
+                    var tacho = new Tachometer(meterDef.Layers.Select(layer => new Tachometer.Layer(layer.Min, layer.Max, monitor[layer.Id], layer.Name, layer.Unit)))
                     {
                         Caption = meterDef.Name,
                         Unit = meterDef.Unit,

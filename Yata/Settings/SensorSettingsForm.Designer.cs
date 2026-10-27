@@ -25,6 +25,7 @@
             this.metersIdColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
             this.selectMeterButton = new System.Windows.Forms.Button();
             this.clearMeterButton = new System.Windows.Forms.Button();
+            this.layersButton = new System.Windows.Forms.Button();
             this.meterCommands = new System.Windows.Forms.FlowLayoutPanel();
             this.tabs = new System.Windows.Forms.TabControl();
             this.meterTab = new System.Windows.Forms.TabPage();
@@ -74,7 +75,7 @@
             // metersNameColumn
             // 
             this.metersNameColumn.FillWeight = 90F;
-            this.metersNameColumn.HeaderText = "表示名";
+            this.metersNameColumn.HeaderText = "表示名（最外層）";
             this.metersNameColumn.Name = "metersNameColumn";
             this.metersNameColumn.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
             // 
@@ -131,12 +132,18 @@
             this.clearMeterButton.Text = "選択を解除";
             this.clearMeterButton.UseVisualStyleBackColor = true;
             this.clearMeterButton.Click += new System.EventHandler(this.ClearMeterButton_Click);
+            this.layersButton.AutoSize = true;
+            this.layersButton.Name = "layersButton";
+            this.layersButton.Size = new System.Drawing.Size(100, 30);
+            this.layersButton.Text = "層を編集…";
+            this.layersButton.Click += new System.EventHandler(this.LayersButton_Click);
             // 
             // meterCommands
             // 
             this.meterCommands.AutoSize = true;
             this.meterCommands.Controls.Add(this.selectMeterButton);
             this.meterCommands.Controls.Add(this.clearMeterButton);
+            this.meterCommands.Controls.Add(this.layersButton);
             this.meterCommands.Dock = System.Windows.Forms.DockStyle.Top;
             this.meterCommands.Location = new System.Drawing.Point(3, 3);
             this.meterCommands.Name = "meterCommands";
@@ -253,6 +260,7 @@
         private System.Windows.Forms.DataGridViewTextBoxColumn metersIdColumn;
         private System.Windows.Forms.Button selectMeterButton;
         private System.Windows.Forms.Button clearMeterButton;
+        private System.Windows.Forms.Button layersButton;
         private System.Windows.Forms.FlowLayoutPanel meterCommands;
         private System.Windows.Forms.TabControl tabs;
         private System.Windows.Forms.TabPage meterTab;

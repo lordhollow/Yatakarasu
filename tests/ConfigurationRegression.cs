@@ -36,6 +36,10 @@ static class ConfigurationRegression
             Run("Sensor round trip with six slots, two plots and invariant numbers", SensorRoundTrip);
             Run("Invalid sensor data cannot overwrite an existing file", SensorValidation);
             Run("Strict parser reports malformed sensor lines", SensorParsing);
+            Run("Meter layers preserve order, independent ranges and sensor usage", MeterLayerDefinitions);
+            Run("Concentric meters normalize layers and render missing samples", MeterLayerDrawing);
+            Run("Meter clicks cycle all layers and individual labels without persistence", MeterLayerCycling);
+            Run("Meter layer editor reorders, cancels and preserves all slots", MeterLayerEditing);
             Run("Launcher preserves keys, comments, options and page positions", LauncherRoundTrip);
             Run("Launcher rejects duplicate and out-of-range positions", LauncherValidation);
             Run("Atomic saves keep a backup", Backups);
@@ -122,6 +126,155 @@ static class ConfigurationRegression
         try { new SensorDefine().ReadFromFile(path, true); }
         catch (FormatException ex) { Check(ex.Message.Contains("2行目"), "Line number is missing."); return; }
         throw new Exception("Malformed sensor configuration was ignored.");
+    }
+    static void MeterLayerDefinitions()
+    {
+        var definition = Sensors();
+        definition.MeterDefines[0].InnerLayers.Add(new MeterItemDefine { Name = "GPU", Id = "/gpu/temp", Unit = "°C", Min = -20.5f, Max = 120.5f });
+        definition.MeterDefines[0].InnerLayers.Add(new MeterItemDefine { Name = "GPT", Id = "/codex/remaining/5h", Unit = "%", Min = 0, Max = 100 });
+        var path = Path.Combine(root, "layered-sensor.txt"); definition.Save(path);
+        var loaded = new SensorDefine(); loaded.ReadFromFile(path, true); loaded.EnsureFixedLayout();
+        Check(loaded.MeterDefines.Count == 6 && loaded.MeterDefines[0].Layers.Select(layer => layer.Name).SequenceEqual(new[] { "CPU Fan", "GPU", "GPT" }), "Layer order or meter slots changed.");
+        Check(loaded.MeterDefines[0].InnerLayers[0].Min == -20.5f && loaded.MeterDefines[0].InnerLayers[0].Max == 120.5f, "Per-layer ranges were lost.");
+        Check(loaded.SensorUsage().Contains("/codex/remaining/5h"), "An inner sensor was not monitored.");
+        var before = File.ReadAllText(path);
+        loaded.MeterDefines[0].InnerLayers[0].Max = -30; Reject(() => loaded.Save(path));
+        Check(before == File.ReadAllText(path), "Invalid inner range overwrote the file.");
+        var orphan = Path.Combine(root, "orphan-layer.txt"); File.WriteAllText(orphan, "MeterLayer\tOrphan\t%\t0\t100\t/test\n");
+        Reject(() => new SensorDefine().ReadFromFile(orphan, true));
+        loaded.ReadFromFile(Path.Combine(root, "sensor.txt"), true);
+        Check(loaded.MeterDefines.All(meter => meter.InnerLayers.Count == 0), "Legacy file gained layers.");
+    }
+    static void MeterLayerDrawing()
+    {
+        using (var usage = new CodexUsageMonitor(token => System.Threading.Tasks.Task.FromResult(CodexUsageSnapshot.Parse("{}")), () => DateTimeOffset.UtcNow))
+        {
+            var outer = new ValueHistorySensor(new CodexUsageSensor(usage, false)) { Value = 50 };
+            var inner = new ValueHistorySensor(new CodexUsageSensor(usage, true)) { Value = 150 };
+            using (var meter = new Tachometer(new[] { new Tachometer.Layer(0, 100, outer), new Tachometer.Layer(100, 300, inner) }) { Caption = "Outer" })
+            using (var image = new Bitmap(72, 72))
+            using (var graphics = Graphics.FromImage(image))
+            {
+                Check(meter.Update() && meter.DisplayText == "Outer", "Healthy multilayer meter displayed numbers/units.");
+                meter.Draw(graphics);
+                Check(image.GetPixel(63, 36).ToArgb() == Color.DarkSlateBlue.ToArgb(), "First item is not the outer ring.");
+                Check(image.GetPixel(48, 36).ToArgb() == Color.FromArgb(65, 65, 65).ToArgb(), "Inner range was normalized with the outer range.");
+                Check(!meter.Update(), "Unchanged layers trigger redraws.");
+                inner.Value = null; Check(meter.Update(), "Missing layer did not invalidate drawing."); meter.Draw(graphics);
+                Check(meter.DisplayText == "Outer\r\n----" && image.GetPixel(48, 36).ToArgb() == Color.Red.ToArgb(), "Missing layer is not full red with ----.");
+                Check(image.GetPixel(63, 36).ToArgb() == Color.DarkSlateBlue.ToArgb(), "Missing inner layer changed the healthy outer ring.");
+                var preview = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "previews", "meter-layers-missing.png"); Directory.CreateDirectory(Path.GetDirectoryName(preview)); image.Save(preview); images.Add(preview);
+                inner.Value = 200; meter.Update(); meter.Draw(graphics);
+                Check(meter.DisplayText == "Outer" && image.GetPixel(48, 36).ToArgb() == Color.DarkSlateBlue.ToArgb(), "Recovery did not restore the inner ring.");
+                outer.Value = float.NaN; meter.Update(); meter.Draw(graphics);
+                Check(image.GetPixel(63, 36).ToArgb() == Color.Red.ToArgb(), "Non-finite samples were not treated as missing.");
+                outer.Value = 500; inner.Value = -500; meter.Update(); meter.Draw(graphics);
+                Check(image.GetPixel(48, 36).ToArgb() == Color.FromArgb(65, 65, 65).ToArgb(), "Out-of-range values were not clamped.");
+            }
+            outer.Value = null;
+            using (var single = new Tachometer(0, 100, outer) { Caption = "Single", Unit = "%" })
+            using (var image = new Bitmap(72, 72))
+            using (var graphics = Graphics.FromImage(image))
+            {
+                single.Update(); single.Draw(graphics);
+                Check(single.DisplayText.Contains("----") && image.GetPixel(60, 36).ToArgb() == Color.Red.ToArgb(), "Missing single meter did not become full red.");
+                outer.Value = 25; single.Update();
+                Check(single.DisplayText == "Single\r\n25.0\r\n%", "Single meter lost numeric display.");
+            }
+            var last = new ValueHistorySensor(new CodexUsageSensor(usage, false)) { Value = 0 };
+            outer.Value = 50; inner.Value = 200;
+            using (var three = new Tachometer(new[] { new Tachometer.Layer(0, 100, outer), new Tachometer.Layer(100, 300, inner), new Tachometer.Layer(-10, 10, last) }) { Caption = "Three" })
+            using (var image = new Bitmap(72, 72))
+            using (var graphics = Graphics.FromImage(image))
+            {
+                three.Update(); three.Draw(graphics);
+                foreach (var x in new[] { 65, 55, 45 }) Check(image.GetPixel(x, 36).ToArgb() == Color.DarkSlateBlue.ToArgb(), "Three layers are not concentric in assignment order.");
+                inner.Value = null; three.Update(); three.Draw(graphics);
+                Check(image.GetPixel(55, 36).ToArgb() == Color.Red.ToArgb() && image.GetPixel(65, 36).ToArgb() == Color.DarkSlateBlue.ToArgb() && image.GetPixel(45, 36).ToArgb() == Color.DarkSlateBlue.ToArgb(), "A missing middle layer covered its neighbors.");
+                inner.Value = 200; last.Value = null; three.Update(); three.Draw(graphics);
+                Check(image.GetPixel(45, 36).ToArgb() == Color.Red.ToArgb() && three.DisplayText == "Three\r\n----", "Missing last layer was not shown.");
+                var handles = GdiHandles(Process.GetCurrentProcess().Handle, 0);
+                for (int i = 0; i < 1000; i++) { three.Update(); three.Draw(graphics); }
+                Check(GdiHandles(Process.GetCurrentProcess().Handle, 0) <= handles + 2, "Repeated drawing leaked GDI resources.");
+            }
+        }
+    }
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetGuiResources")]
+    static extern int GdiHandles(IntPtr process, int kind);
+    static void MeterLayerCycling()
+    {
+        using (var usage = new CodexUsageMonitor(token => System.Threading.Tasks.Task.FromResult(CodexUsageSnapshot.Parse("{}")), () => DateTimeOffset.UtcNow))
+        {
+            var first = new ValueHistorySensor(new CodexUsageSensor(usage, false)) { Value = 50 };
+            var second = new ValueHistorySensor(new CodexUsageSensor(usage, false)) { Value = 150 };
+            var last = new ValueHistorySensor(new CodexUsageSensor(usage, true)) { Value = null };
+            var layers = new[] { new Tachometer.Layer(0, 100, first, "CPU", "°C"), new Tachometer.Layer(100, 300, second, "Fan", "rpm"), new Tachometer.Layer(0, 100, last, "GPT", "%") };
+            using (var meter = new Tachometer(layers))
+            using (var image = new Bitmap(72, 72))
+            using (var graphics = Graphics.FromImage(image))
+            {
+                var container = new WidgetContainer(); container.Add(meter, new Point(10, 10));
+                meter.Update(); Check(meter.VisibleLayer == -1 && meter.DisplayText == "CPU\r\n----", "Initial view is not all layers.");
+                container.Click(11, 11); Check(meter.Update(), "Click did not invalidate the cached drawing."); meter.Draw(graphics);
+                Check(meter.VisibleLayer == 0 && meter.DisplayText == "CPU\r\n50.0\r\n°C" && image.GetPixel(60, 36).ToArgb() == Color.DarkSlateBlue.ToArgb(), "First layer does not show its own label/value/unit at full size.");
+                second.Value = 200; Check(!meter.Update(), "A hidden layer caused an unnecessary redraw.");
+                second.Value = 150; Check(!meter.Update(), "A hidden layer caused an unnecessary redraw on recovery.");
+                container.Click(11, 11); meter.Update(); meter.Draw(graphics);
+                Check(meter.VisibleLayer == 1 && meter.DisplayText == "Fan\r\n150.0\r\nrpm", "Second layer used another layer's label/range/unit.");
+                container.Click(11, 11); meter.Update(); meter.Draw(graphics);
+                Check(meter.VisibleLayer == 2 && meter.DisplayText == "GPT\r\n----\r\n%" && image.GetPixel(60, 36).ToArgb() == Color.Red.ToArgb(), "Missing individual layer is not full red with ----.");
+                var preview = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "previews", "meter-selected-missing.png"); image.Save(preview); images.Add(preview);
+                container.Click(11, 11); meter.Update();
+                Check(meter.VisibleLayer == -1 && meter.DisplayText == "CPU\r\n----", "Cycle did not return to all layers.");
+                for (int i = 0; i < 40; i++) { container.Click(11, 11); meter.Update(); meter.Draw(graphics); }
+                Check(meter.VisibleLayer == -1 && !meter.Update(), "Repeated cycles retained invalidation or drifted.");
+                container.Click(500, 500); Check(meter.VisibleLayer == -1, "A click outside the meter changed its selection.");
+                container.Click(11, 11); meter.Update();
+                using (var restarted = new Tachometer(layers))
+                { restarted.Update(); Check(restarted.VisibleLayer == -1 && restarted.DisplayText == "CPU\r\n----", "A replacement widget retained another instance's selection."); }
+            }
+            using (var single = new Tachometer(0, 100, first) { Caption = "Single", Unit = "%" })
+            {
+                single.Update(); single.Click(0, 0);
+                Check(single.VisibleLayer == -1 && !single.Update() && single.DisplayText == "Single\r\n50.0\r\n%", "Single item meter changed view on click.");
+            }
+        }
+    }
+    static void MeterLayerEditing()
+    {
+        var choices = new List<SensorChoice>();
+        using (var form = new SensorSettingsForm(Path.Combine(root, "layered-sensor.txt"), choices))
+        using (var editor = new MeterLayersForm(Sensors().MeterDefines[0].Layers, choices))
+        {
+            var initialOutput = Path.Combine(root, "layer-editor-unchanged.txt");
+            typeof(SensorSettingsForm).GetMethod("SaveDefinition", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(form, new object[] { initialOutput });
+            Check(form.ResultDefinition.MeterDefines[0].Layers.Count() == 3, "Opening and saving the parent lost inner layers.");
+            var grid = Find<DataGridView>(editor);
+            typeof(MeterLayersForm).GetMethod("AddButton_Click", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(editor, new object[] { null, EventArgs.Empty });
+            SensorSettingsForm.DataCell(grid.Rows[1], "Name").Value = "Inner";
+            SensorSettingsForm.DataCell(grid.Rows[1], "Id").Value = "/inner";
+            editor.MoveLayer(-1);
+            var items = editor.ReadLayers();
+            Check(items[0].Name == "Inner" && items[1].Name == "CPU Fan", "Reordering did not move all layer fields together.");
+            form.ApplyMeterLayers(0, items);
+            items[0].Name = "Do not alias";
+            var output = Path.Combine(root, "layer-editor.txt");
+            typeof(SensorSettingsForm).GetMethod("SaveDefinition", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(form, new object[] { output });
+            Check(form.ResultDefinition.MeterDefines[0].Name == "Inner" && form.ResultDefinition.MeterDefines[0].InnerLayers.Single().Name == "CPU Fan", "Layer edit did not reach the configuration.");
+            Check(form.ResultDefinition.MeterDefines[2].Id == "/gpu/0/fan/0", "Layer edits changed another meter slot.");
+            editor.MoveLayer(1); editor.ReadLayers();
+            Check(form.ResultDefinition.MeterDefines[0].Name == "Inner", "Cancel mutated the parent.");
+            Preview(editor, "meter-layer-editor.png");
+            typeof(MeterLayersForm).GetMethod("RemoveButton_Click", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(editor, new object[] { null, EventArgs.Empty });
+            typeof(MeterLayersForm).GetMethod("RemoveButton_Click", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(editor, new object[] { null, EventArgs.Empty });
+            Check(editor.ReadLayers().Count == 1, "The last assigned item could be removed.");
+            SensorSettingsForm.DataCell(grid.Rows[0], "Min").Value = "1000";
+            SensorSettingsForm.DataCell(grid.Rows[0], "Max").Value = "100";
+            Reject(() => editor.ReadLayers());
+            form.ApplyMeterLayers(0, new[] { items[1] });
+            typeof(SensorSettingsForm).GetMethod("SaveDefinition", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(form, new object[] { output });
+            Check(form.ResultDefinition.MeterDefines[0].InnerLayers.Count == 0, "Returning to a single layer retained old layers.");
+        }
     }
     static void LauncherRoundTrip()
     {
@@ -274,7 +427,7 @@ static class ConfigurationRegression
     }
     static void DesignerForms()
     {
-        foreach (var type in new[] { typeof(ConfigurationEditorForm), typeof(SensorSettingsForm), typeof(LauncherSettingsForm), typeof(LauncherEntryForm), typeof(SensorPickerForm), typeof(IconPickerForm), typeof(SteamPickerForm), typeof(PlotEditor) })
+        foreach (var type in new[] { typeof(ConfigurationEditorForm), typeof(SensorSettingsForm), typeof(MeterLayersForm), typeof(LauncherSettingsForm), typeof(LauncherEntryForm), typeof(SensorPickerForm), typeof(IconPickerForm), typeof(SteamPickerForm), typeof(PlotEditor) })
         {
             using (var surface = new System.ComponentModel.Design.DesignSurface())
             {
@@ -312,7 +465,7 @@ static class ConfigurationRegression
             Check(ReferenceEquals(body.Parent, rootControl), "Editable inherited content is inside another inherited container.");
             var inheritance = (System.ComponentModel.InheritanceAttribute)System.ComponentModel.TypeDescriptor.GetAttributes(body)[typeof(System.ComponentModel.InheritanceAttribute)];
             Check(inheritance.InheritanceLevel != System.ComponentModel.InheritanceLevel.InheritedReadOnly, "Editor content is read-only in the designer.");
-            foreach (var type in new[] { typeof(SensorSettingsForm), typeof(LauncherSettingsForm), typeof(PlotEditor) })
+            foreach (var type in new[] { typeof(SensorSettingsForm), typeof(MeterLayersForm), typeof(LauncherSettingsForm), typeof(PlotEditor) })
             using (var original = (Control)Activator.CreateInstance(type))
             {
                 var originalBody = original is ConfigurationEditorForm ? (Control)bodyField.GetValue(original) : original;
@@ -377,7 +530,9 @@ static class ConfigurationRegression
         using (var sensor = new SensorSettingsForm())
         using (var launcher = new LauncherSettingsForm())
         using (var plot = new PlotEditor())
+        using (var meterLayers = new MeterLayersForm())
         {
+            CheckUnboundDesignerGrids(meterLayers);
             CheckUnboundDesignerGrids(sensor); CheckUnboundDesignerGrids(launcher); CheckUnboundDesignerGrids(plot);
             var choices = new List<SensorChoice>();
             using (var runtime = new SensorSettingsForm(Path.Combine(root, "sensor.txt"), choices))
