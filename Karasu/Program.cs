@@ -17,12 +17,12 @@ namespace Karasu
         /// <summary>
         /// コマンド処理の間隔(ms)
         /// </summary>
-        const int interval = 3000;
+        const int interval = 100;
 
         /// <summary>
-        /// タイムアウトまでのインターバル回数(3秒*60=3分)
+        /// タイムアウトまでのインターバル回数(100ms*1800=3分)
         /// </summary>
-        const int timeout = 60;
+        const int timeout = 1800;
 
         /// <summary>
         /// アプリケーションのメイン エントリ ポイントです。
@@ -62,18 +62,28 @@ namespace Karasu
                         try
                         {
                             using (var msg = listener.AcceptTcpClient())
-                                DispatchCommand(ReadCommand(msg.GetStream()));
+                            {
+                                var stream = msg.GetStream();
+                                stream.WriteTimeout = 3000;
+                                var command = ReadCommand(stream);
+                                if (command.StartsWith("REQ3\t", StringComparison.Ordinal))
+                                {
+                                    var response = System.Text.Encoding.UTF8.GetBytes(HandleRequest(command));
+                                    stream.Write(response, 0, response.Length);
+                                }
+                                else DispatchCommand(command);
+                            }
                         }
                         catch (Exception ex) { ErrorLog(ex); }
                         cnt = 0;
                     }
                     else
                     {
-                        //３秒寝ておく。
+                        //応答確認を待たせないよう短い間隔で接続を確認する。
                         System.Threading.Thread.Sleep(interval);
                         cnt++;
                     }
-                    //30秒何もなければ終了。
+                    //3分間何もなければ終了。
                     //DateTimeで30秒数えるとすると、途中にスリープ/復帰が入ると死ぬ気がするので
                     //スリープ中はカウントが止まるように自力でカウントしている。
                     if (cnt >= timeout)
@@ -97,6 +107,57 @@ namespace Karasu
         }
 
         private static bool ExitRequest = false;
+
+        static readonly object requestGate = new object();
+        static readonly Dictionary<string, Tuple<string, string>> responses = new Dictionary<string, Tuple<string, string>>();
+        static readonly Queue<string> responseOrder = new Queue<string>();
+        static readonly Dictionary<string, long> recentCommands = new Dictionary<string, long>();
+        static readonly Stopwatch requestWatch = Stopwatch.StartNew();
+        static Func<long> requestClock = () => requestWatch.ElapsedMilliseconds;
+        static Action<ProcessStartInfo> startProcess = info => { using (var process = Process.Start(info)) { } };
+
+        // The response is cached before writing to the socket. Replaying an ID cannot relaunch it.
+        private static string HandleRequest(string request)
+        {
+            var parts = request.Split('\t');
+            Guid id;
+            if (parts.Length != 3 || !Guid.TryParseExact(parts[1], "N", out id)) return Reply("-", "error", "要求の形式が不正です。");
+            lock (requestGate)
+            {
+                Tuple<string, string> cached;
+                if (responses.TryGetValue(parts[1], out cached))
+                    return cached.Item1 == request ? cached.Item2 : Reply(parts[1], "error", "要求IDが重複しています。");
+                string response;
+                try
+                {
+                    var command = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(parts[2]));
+                    bool launch = command.StartsWith("EXEC\t") || command.StartsWith("EXEC2\t") || command.StartsWith("COMMAND\t");
+                    var now = requestClock();
+                    long previous;
+                    if (launch && recentCommands.TryGetValue(command, out previous) && now - previous < 2000)
+                    {
+                        recentCommands[command] = now;
+                        response = Reply(parts[1], "blocked", "連続した実行要求を抑制しました。");
+                    }
+                    else
+                    {
+                        DispatchCommand(command);
+                        if (launch)
+                        {
+                            if (recentCommands.Count >= 256) recentCommands.Remove(recentCommands.OrderBy(pair => pair.Value).First().Key);
+                            recentCommands[command] = requestClock();
+                        }
+                        response = Reply(parts[1], "ok", launch ? "起動処理が成功しました。" : "処理が完了しました。");
+                    }
+                }
+                catch (Exception ex) { response = Reply(parts[1], "error", ex.Message); }
+                responses.Add(parts[1], Tuple.Create(request, response)); responseOrder.Enqueue(parts[1]);
+                while (responseOrder.Count > 256) responses.Remove(responseOrder.Dequeue());
+                return response;
+            }
+        }
+        static string Reply(string id, string status, string message)
+            => "RESULT\t" + id + "\t" + status + "\t" + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(message.Length > 1024 ? message.Substring(0, 1024) : message));
 
         private static string ReadCommand(System.IO.Stream stream)
         {
@@ -157,14 +218,14 @@ namespace Karasu
         /// </remarks>
         private static void DispatchCommand(string cmd)
         {
-            if (cmd.StartsWith("HEARTBEAT"))
+            if (cmd == "HEARTBEAT")
             {
 #if DEBUG
                 Log(cmd);
 #endif
-                //なにもしない
+                return;
             }
-            if (cmd.StartsWith("EXIT"))
+            if (cmd == "EXIT")
             {
                 Log(cmd);
                 ExitRequest = true;
@@ -173,7 +234,7 @@ namespace Karasu
             {
                 var parts = cmd.Split('\t');
                 int row, column;
-                if (parts.Length != 5 || !int.TryParse(parts[2], out row) || !int.TryParse(parts[3], out column)) return;
+                if (parts.Length != 5 || !int.TryParse(parts[2], out row) || !int.TryParse(parts[3], out column) || row < 0 || column < 0 || column >= 16) throw new InvalidDataException("ランチャー位置が不正です。");
                 var definitionPath = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(parts[4]));
                 ExecutePosition(parts[1], row, column, definitionPath);
             }
@@ -182,7 +243,7 @@ namespace Karasu
                 Log(cmd);
                 //実行コマンド。
                 var parts = cmd.Split('\t');
-                if (parts.Length < 4) return;
+                if (parts.Length < 4) throw new InvalidDataException("実行要求が不正です。");
                 Execute(parts[1], parts[2], parts[3]);
 
             }
@@ -191,22 +252,20 @@ namespace Karasu
                 Log(cmd);
                 //実行モード
                 var parts = cmd.Split('\t');
-                if (parts.Length < 2) return;
+                if (parts.Length != 2) throw new InvalidDataException("実行モードが不正です。");
                 var fn = YataFile("karasu.exec.bat");
                 if (parts[1] == "KarasProcessStart")
                 {
-                    try
-                    {
-                        var f = File.ReadAllLines(fn)[1];   //0はchcpなので無視する
-                        Process.Start(f);
-                    }
-                    catch { }
+                    var f = File.ReadAllLines(fn)[1];   //0はchcpなので無視する
+                    startProcess(CreateStartInfo(f, ""));
                 }
-                else
+                else if (parts[1] == "KarasuCommandLine" || parts[1] == "KarasuCommandLineKeepAlive" || parts[1] == "KarasuCommandLineRedirect")
                 {
-                    Process.Start("Cmd.exe", "/C " + fn);
+                    startProcess(CreateStartInfo("Cmd.exe", "/C \"" + fn + "\""));
                 }
+                else throw new InvalidDataException("実行モードが不正です。");
             }
+            else throw new InvalidDataException("未対応の要求です。YataとKarasuを両方更新してください。");
         }
 
         /// <summary>
@@ -237,21 +296,23 @@ namespace Karasu
                             if (dt[2] == cmdCode)
                             {
                                 Open(dt[3], param);
+                                return;
                             }
                         }
                     }
                 }
-
+                throw new InvalidDataException("認証キーまたは起動項目が一致しません。");
             }
             catch (Exception e)
             {
                 ErrorLog(e);
+                throw;
             }
         }
 
         private static void Open(string cmd, string param)
         {
-            Process.Start(CreateStartInfo(cmd, param));
+            startProcess(CreateStartInfo(cmd, param));
         }
 
         private static ProcessStartInfo CreateStartInfo(string cmd, string param)
@@ -269,7 +330,8 @@ namespace Karasu
         private static void ExecutePosition(string key, int row, int column, string definitionPath)
         {
             var info = ResolvePosition(key, row, column, definitionPath);
-            if (info != null) Process.Start(info);
+            if (info == null) throw new InvalidDataException("認証キーまたは起動項目が一致しません。");
+            startProcess(info);
         }
 
         private static ProcessStartInfo ResolvePosition(string key, int row, int column, string definitionPath)

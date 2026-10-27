@@ -46,6 +46,9 @@ static class ConfigurationRegression
             Run("Meter warning options persist through files, editors and reordering", MeterWarningSettings);
             Run("Capture volume access and disposal share the endpoint gate", CaptureVolumeSynchronization);
             Run("Clicks redraw only the affected cached widget immediately", ImmediateClickDrawing);
+            Run("Launcher acknowledgements match requests and prevent server replay", LauncherAcknowledgements);
+            Run("Rapid launch clicks are suppressed while pending and until quiet", LauncherClickSuppression);
+            Run("Launcher indicators wait for actual results and report failures", LauncherResultFeedback);
             Run("Launcher preserves keys, comments, options and page positions", LauncherRoundTrip);
             Run("Launcher rejects duplicate and out-of-range positions", LauncherValidation);
             Run("Atomic saves keep a backup", Backups);
@@ -512,6 +515,112 @@ static class ConfigurationRegression
         public override bool Update() { Updates++; return true; }
         public override void Click(int x, int y) { clicked = true; OnClick?.Invoke(); }
         public override void Draw(Graphics graphics) => graphics.Clear(clicked ? Color.Lime : Color.Red);
+    }
+    static void LauncherAcknowledgements()
+    {
+        var server = Assembly.LoadFrom(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Karasu.exe")).GetType("Karasu.Program");
+        var flags = BindingFlags.Static | BindingFlags.NonPublic;
+        var startField = server.GetField("startProcess", flags); var clockField = server.GetField("requestClock", flags);
+        var originalStart = startField.GetValue(null); var originalClock = clockField.GetValue(null);
+        long now = 10000; int starts = 0; bool fail = false;
+        startField.SetValue(null, (Action<ProcessStartInfo>)(info => { starts++; if (fail) throw new System.ComponentModel.Win32Exception("Injected start failure"); }));
+        clockField.SetValue(null, (Func<long>)(() => now));
+        string path = Path.Combine(root, "ack-launcher.txt"); Launcher().Save(path);
+        var command = "EXEC2\ttest-key\t0\t0\t" + Convert.ToBase64String(Encoding.UTF8.GetBytes(path));
+        Func<string, string> envelope = body => "REQ3\t" + Guid.NewGuid().ToString("N") + "\t" + Convert.ToBase64String(Encoding.UTF8.GetBytes(body));
+        Func<string, LaunchResult> run = request => Yata.Components.Karasu.ParseResponse((string)Karasu("HandleRequest", request), request.Split('\t')[1]);
+        try
+        {
+            var first = envelope(command); Check(run(first).Success && starts == 1, "Server did not acknowledge Process.Start.");
+            Check(run(first).Success && starts == 1, "Replaying a request ID relaunched the app.");
+            Check(run(envelope(command)).Suppressed && starts == 1, "Server did not suppress duplicate clicks.");
+            now += 2100; Check(run(envelope(command)).Success && starts == 2, "Quiet period did not allow an intentional relaunch.");
+            Check(!run(envelope(command.Replace("test-key", "wrong"))).Success && starts == 2, "Authentication failure was reported as success.");
+            fail = true; now += 2100; Check(!run(envelope(command)).Success && starts == 3, "Start failure was acknowledged as success."); fail = false;
+            var collision = first.Split('\t'); collision[2] = Convert.ToBase64String(Encoding.UTF8.GetBytes("HEARTBEAT"));
+            Check(!run(string.Join("\t", collision)).Success && starts == 3, "A reused ID accepted a different body.");
+            var malformed = "REQ3\t" + Guid.NewGuid().ToString("N") + "\t!";
+            Check(!run(malformed).Success, "Malformed request payload was accepted.");
+            now += 2100;
+            var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0); listener.Start();
+            try
+            {
+                int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+                var peer = System.Threading.Tasks.Task.Run(() =>
+                {
+                    using (var socket = listener.AcceptTcpClient())
+                    {
+                        var stream = socket.GetStream(); var request = (string)Karasu("ReadCommand", stream);
+                        var bytes = Encoding.UTF8.GetBytes((string)Karasu("HandleRequest", request));
+                        foreach (var value in bytes) stream.WriteByte(value);
+                    }
+                });
+                var client = new Yata.Components.Karasu(port);
+                var response = client.RequestAsync(command).GetAwaiter().GetResult();
+                Check(peer.Wait(6000) && response.Success && client.Active && starts == 4, "Real loopback ACK/half-close/fragmented reply failed: " + response.Status + "; " + response.Message + "; starts=" + starts + "; active=" + client.Active);
+                var noReply = System.Threading.Tasks.Task.Run(() =>
+                {
+                    using (var socket = listener.AcceptTcpClient()) Karasu("ReadCommand", socket.GetStream());
+                });
+                response = client.RequestAsync(command).GetAwaiter().GetResult();
+                Check(noReply.Wait(6000) && response.Status == "unknown" && !client.Active && starts == 4, "Missing ACK was success or caused an automatic retry.");
+            }
+            finally { listener.Stop(); }
+            bool mismatch = false;
+            try { Yata.Components.Karasu.ParseResponse("RESULT\twrong\tok\t", "expected"); } catch (InvalidDataException) { mismatch = true; }
+            Check(mismatch, "A response for another request was accepted.");
+            using (var stream = new MemoryStream(new byte[8193]))
+            {
+                bool oversized = false; try { Yata.Components.Karasu.ReadResponse(stream); } catch (InvalidDataException) { oversized = true; }
+                Check(oversized, "Oversized response was accepted.");
+            }
+        }
+        finally { startField.SetValue(null, originalStart); clockField.SetValue(null, originalClock); }
+    }
+    static void LauncherClickSuppression()
+    {
+        long now = 0; int requests = 0;
+        var pending = new System.Threading.Tasks.TaskCompletionSource<LaunchResult>();
+        var client = new Yata.Components.Karasu(0, command => { requests++; return pending.Task; });
+        var app = new LauncherApplication { Command = "key", DefinitionPath = Path.Combine(root, "launch.txt"), ClickMilliseconds = () => now };
+        System.Threading.Tasks.Task<LaunchResult> first, duplicate;
+        Check(app.TryExecute(client, out first) && requests == 1, "First launch was not submitted immediately.");
+        now = 5000;
+        Check(!app.TryExecute(client, out duplicate) && ReferenceEquals(first, duplicate) && requests == 1, "Pending click was queued twice.");
+        pending.SetResult(new LaunchResult("ok", "started")); Check(first.Wait(2000), "ACK did not complete the launch.");
+        now = 5001; Check(!app.TryExecute(client, out duplicate), "Launch repeated before the quiet period.");
+        now = 7101; Check(app.TryExecute(client, out duplicate) && duplicate.Wait(2000) && requests == 2, "Intentional repeat after quiet period failed.");
+        for (now = 7200; now < 12000; now += 100) Check(!app.TryExecute(client, out duplicate), "A continuous click burst relaunched the app.");
+        now += 2100; Check(app.TryExecute(client, out duplicate) && duplicate.Wait(2000) && requests == 3, "Burst suppression did not recover after quiet time.");
+        int actions = 0;
+            var navigation = new LauncherApplication { IsNavigation = true, Application = new Yata.Components.Application.ActionInvoker(() => actions++) };
+        for (int i = 0; i < 4; i++) Check(navigation.Execute(null), "Navigation was unnecessarily throttled.");
+        Check(actions == 4, "Navigation clicks were lost.");
+        var internalAction = new LauncherApplication { Application = new Yata.Components.Application.ActionInvoker(() => actions++) };
+        Check(internalAction.Execute(null) && !internalAction.Execute(null) && actions == 5, "An internal application executed repeatedly on rapid clicks.");
+    }
+    static void LauncherResultFeedback()
+    {
+        var pending = new System.Threading.Tasks.TaskCompletionSource<LaunchResult>(); int requests = 0;
+        var client = new Yata.Components.Karasu(0, command => ++requests == 1 ? pending.Task : System.Threading.Tasks.Task.FromResult(new LaunchResult("error", "Injected failure")));
+        using (var launcher = new CommandLauncher(CommandLauncher.ConstructionParameter.WXGA) { Karasu = client })
+        using (var image = new Bitmap(1280, 180))
+        using (var graphics = Graphics.FromImage(image))
+        {
+            var first = new LauncherApplication { Caption = "First", Command = "key", DefinitionPath = Path.Combine(root, "fake.txt") };
+            launcher[0, 0] = first;
+            launcher[0, 1] = new LauncherApplication { Caption = "Failed", Command = "key", Column = 1, DefinitionPath = first.DefinitionPath };
+            var failures = new List<string>(); launcher.ExecutionFailed += failures.Add;
+            launcher.Click(40, 40); launcher.Update(); launcher.Draw(graphics);
+            var waiting = image.GetPixel(10, 8); Check(waiting.R > 100 && waiting.G > 100 && waiting.B < 20, "Pending launch was not yellow.");
+            launcher.Click(40, 40); launcher.Update(); Check(requests == 1, "Repeated indicator click resubmitted the launch.");
+            pending.SetResult(new LaunchResult("ok", "started"));
+            var completion = (System.Threading.Tasks.Task<LaunchResult>)typeof(CommandLauncher).GetField("lastCompletion", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(launcher);
+            Check(completion.Wait(2000), "Result was not delivered."); launcher.Update(); launcher.Draw(graphics);
+            Check(image.GetPixel(10, 8).G > image.GetPixel(10, 8).R, "Acknowledged success did not become green.");
+            launcher.Click(120, 40); launcher.Update(); launcher.Draw(graphics);
+            Check(failures.Single().Contains("Injected failure") && image.GetPixel(90, 8).R > image.GetPixel(90, 8).G, "Failure was not red or its reason was hidden.");
+        }
     }
     static void LauncherRoundTrip()
     {

@@ -16,6 +16,16 @@ namespace Yata.Components.Widget
         Brush blankBrush;
         StringFormat center;
         bool needUpdate = true;
+        sealed class PendingLaunch
+        {
+            internal string Caption;
+            internal Task<LaunchResult> Completion;
+        }
+        readonly List<PendingLaunch> pendingLaunches = new List<PendingLaunch>();
+        Task<LaunchResult> lastCompletion;
+        bool lastClickPending;
+        bool lastClickSuppressed;
+        public event Action<string> ExecutionFailed;
 
 
         public class ConstructionParameter
@@ -132,7 +142,21 @@ namespace Yata.Components.Widget
             var ret = needUpdate;
             needUpdate = false;
 
-            if (indicationLast > 0)
+            for (int i = pendingLaunches.Count - 1; i >= 0; i--)
+            {
+                var pending = pendingLaunches[i];
+                if (!pending.Completion.IsCompleted) continue;
+                var result = pending.Completion.GetAwaiter().GetResult();
+                pendingLaunches.RemoveAt(i);
+                if (ReferenceEquals(lastCompletion, pending.Completion))
+                {
+                    lastClickState = result.Success; lastClickPending = false; lastClickSuppressed = result.Suppressed;
+                    indicationLast = indicationTime; ret = true;
+                }
+                if (!result.Success && !result.Suppressed) ExecutionFailed?.Invoke(pending.Caption + ": " + result.Message);
+            }
+
+            if (indicationLast > 0 && !lastClickPending)
             {
                 indicationLast -= UpdateRate;
                 if (indicationLast < 0) indicationLast = 0;
@@ -162,7 +186,7 @@ namespace Yata.Components.Widget
 
                     if ((indicationLast > 0) && (r + LineOffset == lastClickAppY) && (c == lastClickAppX))
                     {
-                        var indicatorColor = lastClickState ? Color.Lime : Color.Red;
+                        var indicatorColor = lastClickPending ? Color.Gold : lastClickSuppressed ? Color.Silver : lastClickState ? Color.Lime : Color.Red;
                         using (var b = new SolidBrush(Color.FromArgb(255 / indicationTime * indicationLast, indicatorColor)))
                         {
                             graphics.FillRectangle(b, baseX + Parameter.HPadding - Parameter.IndicatorWidth, baseY + Parameter.VPadding - Parameter.IndicatorWidth,
@@ -218,11 +242,20 @@ namespace Yata.Components.Widget
 
             if (app != null)
             {
+                Task<LaunchResult> completion;
+                if (!app.TryExecute(Karasu, out completion)) return;
                 lastClickAppX = ix;
                 lastClickAppY = iy + LineOffset;
-                indicationLast = indicationTime;
-
-                lastClickState = app.Execute(Karasu);
+                // Page navigation clears the indication in ChangePage and has no launch to acknowledge.
+                if (app.IsNavigation && completion.IsCompleted && completion.Result.Success)
+                {
+                    needUpdate = true;
+                    return;
+                }
+                indicationLast = indicationTime; lastClickPending = true; lastClickSuppressed = false;
+                lastCompletion = completion;
+                pendingLaunches.Add(new PendingLaunch { Caption = app.Caption, Completion = completion });
+                needUpdate = true;
             }
         }
 
@@ -253,6 +286,7 @@ namespace Yata.Components.Widget
         {
             LineOffset = ((LineOffset / 2 + delta) % PageCount + PageCount) % PageCount * 2;
             indicationLast = 0;
+            lastCompletion = null; lastClickPending = false;
             needUpdate = true;
         }
 
@@ -306,7 +340,8 @@ namespace Yata.Components.Widget
                 var app = new LauncherApplication
                 {
                     Caption = entry.Caption, Option = entry.Option, DefinitionPath = Path.GetFullPath(defFile),
-                    Row = entry.Row, Column = entry.Column
+                    Row = entry.Row, Column = entry.Column,
+                    IsNavigation = entry.Command == "internal::LauncherNextPage" || entry.Command == "internal::LauncherPreviousPage"
                 };
                 if (entry.Command.StartsWith("internal::"))
                     app.Application = GetInternalApplication(entry.Command.Substring("internal::".Length), container);

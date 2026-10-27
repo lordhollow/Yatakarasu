@@ -45,6 +45,7 @@ namespace Yata
         ConfigurationPaths configurationPaths;
         readonly List<IUpdatable> sensorWidgets = new List<IUpdatable>();
         bool settingsOpen;
+        readonly ToolTip launchResultTip = new ToolTip();
 
         public YataMain()
         {
@@ -74,6 +75,7 @@ namespace Yata
             karasu = new Karasu();
             container.Add(karasu);
             this.FormClosed += (s, a) => karasu.SendImmidiate("EXIT");
+            this.FormClosed += (s, a) => launchResultTip.Dispose();
             suspendChecker = new SuspendedChecker() { Expire = sensorTimeWindow };
             container.Add(suspendChecker);
 
@@ -100,6 +102,7 @@ namespace Yata
             //ランチャ
             launcher = new CommandLauncher(CommandLauncher.ConstructionParameter.WXGA);
             launcher.Karasu = karasu;
+            launcher.ExecutionFailed += message => launchResultTip.Show(message, this, new Point(12, Math.Max(0, Height - launcher.Height - 45)), 5000);
             try { launcher.LoadFromFile(configurationPaths.LauncherFile, container); }
             catch (Exception ex)
             {
